@@ -367,6 +367,11 @@ class Node {
         terminal_type_(Terminal::NonTerminal),
         lower_bound_(GameResult::BLACK_WON),
         upper_bound_(GameResult::WHITE_WON) {}
+  ~Node() { UnsetLowNode(); }
+
+  // Copy that updates low_node_ using UnsetLowNode/SetLowNode and moves
+  // sibling_ to target.
+  Node& operator=(Node&& n);
 
   // Allocates a new edge and a new node. The node has to be without edges
   // before that.
