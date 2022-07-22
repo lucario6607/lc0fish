@@ -52,8 +52,9 @@ namespace lczero {
 // * Potential edges are stored in a simple array inside the LowNode as edges_.
 // * Existing edges are stored in a linked list starting with a child_ pointer
 //   in the LowNode and continuing with a sibling_ pointer in each Node.
-// * Existing edges are connected to the relevant Edge via parent_ and index_
-//   fields and to target LowNode via the low_node_ pointer.
+// * Existing edges have a copy of their potential edge counterpart, index_
+//   among potential edges and are linked to the target LowNode via the
+//   low_node_ pointer.
 //
 // Example:
 //                                 LowNode
@@ -72,12 +73,12 @@ namespace lczero {
 // |                 |    +------------+                      +--------+
 // | child_          | -> | Node       |                      | Nf3    |
 // |                 |    +------------+                      | Bc5    |
-// | ...             | <- | parent_    |                      | a4     |
+// | ...             |    | edge_      |                      | a4     |
 // |                 |    | index_ = 1 |                      | Qxf7   |
 // |                 |    | q_ = 0.5   |    +------------+    | a3     |
 // |                 |    | sibling_   | -> | Node       |    +--------+
 // |                 |    +------------+    +------------+
-// |                 | <------------------- | parent_    |
+// |                 |                      | edge_      |
 // +-----------------+                      | index_ = 3 |
 //                                          | q_ = -0.2  |
 //                                          | sibling_   | -> nullptr
@@ -191,7 +192,7 @@ class LowNode {
         upper_bound_(GameResult::WHITE_WON),
         is_transposition(false) {
     edges_ = Edge::FromMovelist(moves);
-    child_ = std::make_unique<Node>(this, index);
+    child_ = std::make_unique<Node>(edges_[index], index);
   }
 
   void SetNNEval(const NNEval* eval) {
@@ -236,8 +237,6 @@ class LowNode {
   uint8_t GetNumEdges() const { return num_edges_; }
   // Gets pointer to the start of the edge array.
   Edge* GetEdges() const { return edges_.get(); }
-  // Output must point to at least max_needed floats.
-  void CopyPolicy(int max_needed, float* output) const;
 
   // Makes the node terminal and sets it's score.
   void MakeTerminal(GameResult result, float plies_left = 0.0f,
@@ -271,8 +270,8 @@ class LowNode {
   void ReleaseChildrenExceptOne(
       Node* node_to_save, std::vector<std::unique_ptr<Node>>& released_nodes);
 
-  // For a child node, returns corresponding edge.
-  Edge* GetEdgeToNode(const Node* node) const;
+  // Return move policy for edge/node at @index.
+  const Edge& GetEdgeAt(uint16_t index) const;
 
   // Debug information about the node.
   std::string DebugString() const;
@@ -368,16 +367,22 @@ class Node {
   typedef LowNode::Terminal Terminal;
   typedef LowNode::Bounds Bounds;
 
-  // Takes pointer to a @parent low node and own @index in the parent.
-  Node(LowNode* parent, uint16_t index)
-      : parent_(parent),
+  // Takes own @index in the parent.
+  Node(uint16_t index)
+      : index_(index),
+        terminal_type_(Terminal::NonTerminal),
+        lower_bound_(GameResult::BLACK_WON),
+        upper_bound_(GameResult::WHITE_WON) {}
+  // Takes own @edge and @index in the parent.
+  Node(const Edge& edge, uint16_t index)
+      : edge_(edge),
         index_(index),
         terminal_type_(Terminal::NonTerminal),
         lower_bound_(GameResult::BLACK_WON),
         upper_bound_(GameResult::WHITE_WON) {}
   ~Node() { UnsetLowNode(); }
 
-  // Trim node, resetting everything except parent, sibling and index.
+  // Trim node, resetting everything except parent, sibling, edge and index.
   void Trim();
 
   // Allocates a new edge and a new node. The node has to be without edges
@@ -389,8 +394,6 @@ class Node {
     return GetChild();
   }
 
-  // Gets parent low node.
-  LowNode* GetParent() const { return parent_; }
   // Get first child.
   Node* GetChild() const {
     if (!low_node_) return nullptr;
@@ -431,12 +434,6 @@ class Node {
 
   uint8_t GetNumEdges() const {
     return low_node_ ? low_node_->GetNumEdges() : 0;
-  }
-
-  // Output must point to at least @max_needed floats.
-  void CopyPolicy(int max_needed, float* output) const {
-    assert(low_node_);
-    low_node_->CopyPolicy(max_needed, output);
   }
 
   // Makes the node terminal and sets it's score.
@@ -489,14 +486,16 @@ class Node {
       low_node_->ReleaseChildrenExceptOne(node_to_save, released_nodes);
   }
 
-  // For a child node, returns corresponding edge.
-  Edge* GetEdgeToNode(const Node* node) const {
-    assert(low_node_);
-    return low_node_->GetEdgeToNode(node);
+  // Returns move from the point of view of the player making it (if as_opponent
+  // is false) or as opponent (if as_opponent is true).
+  Move GetMove(bool as_opponent = false) const {
+    return edge_.GetMove(as_opponent);
   }
-
-  // Returns edge to the own node.
-  Edge* GetOwnEdge() const { return GetParent()->GetEdgeToNode(this); }
+  // Returns or sets value of Move policy prior returned from the neural net
+  // (but can be changed by adding Dirichlet noise or when turning terminal).
+  // Must be in [0,1].
+  float GetP() const { return edge_.GetP(); }
+  void SetP(float val) { edge_.SetP(val); }
 
   std::shared_ptr<LowNode> GetLowNode() const { return low_node_; }
 
@@ -514,7 +513,8 @@ class Node {
   std::string DebugString() const;
   // Return string describing the edge from node's parent to its low node in the
   // Graphviz dot format.
-  std::string DotEdgeString(bool as_opponent = false) const;
+  std::string DotEdgeString(bool as_opponent = false,
+                            const LowNode* parent = nullptr) const;
   // Return string describing the graph starting at this node in the Graphviz
   // dot format.
   std::string DotGraphString(bool as_opponent = false) const;
@@ -549,8 +549,6 @@ class Node {
   double wl_ = 0.0f;
 
   // 8 byte fields on 64-bit platforms, 4 byte on 32-bit.
-  // Pointer to a parent low node. nullptr for the root.
-  LowNode* parent_ = nullptr;
   // Pointer to a next sibling. nullptr if there are no further siblings.
   std::unique_ptr<Node> sibling_;
 
@@ -566,6 +564,9 @@ class Node {
   // but not finished). This value is added to n during selection which node
   // to pick in MCTS, and also when selecting the best move.
   uint32_t n_in_flight_ = 0;
+
+  // Move and policy for this edge.
+  Edge edge_;
 
   // 2 byte fields.
   // Index of this node is parent's edge list.
@@ -629,7 +630,9 @@ class EdgeAndNode {
   }
 
   // Edge related getters.
-  float GetP() const { return edge_->GetP(); }
+  float GetP() const {
+    return node_ != nullptr ? node_->GetP() : edge_->GetP();
+  }
   Move GetMove(bool flip = false) const {
     return edge_ ? edge_->GetMove(flip) : Move();
   }
@@ -719,7 +722,7 @@ class Edge_Iterator : public EdgeAndNode {
     // 2. Create fresh Node(idx_.5):
     //    node_ptr_ -> &Node(idx_.3).sibling_  ->  Node(idx_.5)
     //    tmp -> Node(idx_.7)
-    auto low_parent = parent->GetLowNode().get();
+    auto low_parent = parent->GetLowNode()->GetEdgeAt(current_idx_);
     *node_ptr_ = std::make_unique<Node>(low_parent, current_idx_);
     // 3. Attach stored pointer back to a list:
     //    node_ptr_ ->
