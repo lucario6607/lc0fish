@@ -677,15 +677,15 @@ class Edge_Iterator : public EdgeAndNode {
   // Creates "end()" iterator.
   Edge_Iterator() {}
 
-  // Creates "begin()" iterator. Also happens to be a range constructor.
-  Edge_Iterator(const Node& parent_node, Ptr child_ptr)
-      : EdgeAndNode(parent_node.GetNumEdges()
-                        ? parent_node.GetLowNode()->GetEdges()
-                        : nullptr,
-                    nullptr),
-        node_ptr_(child_ptr),
-        total_count_(parent_node.GetNumEdges()) {
-    if (edge_) Actualize();
+  // Creates "begin()" iterator.
+  Edge_Iterator(LowNode* parent_node)
+      : EdgeAndNode(parent_node != nullptr ? parent_node->GetEdges() : nullptr,
+                    nullptr) {
+    if (parent_node != nullptr) {
+      node_ptr_ = parent_node->GetChild();
+      total_count_ = parent_node->GetNumEdges();
+      if (edge_) Actualize();
+    }
   }
 
   // Function to support range interface.
@@ -762,13 +762,9 @@ class Edge_Iterator : public EdgeAndNode {
 };
 
 inline Node::ConstIterator Node::Edges() const {
-  return {*this, (low_node_ ? low_node_->GetChild()
-                            : static_cast<std::unique_ptr<Node>*>(nullptr))};
+  return {this->GetLowNode().get()};
 }
-inline Node::Iterator Node::Edges() {
-  return {*this, (low_node_ ? low_node_->GetChild()
-                            : static_cast<std::unique_ptr<Node>*>(nullptr))};
-}
+inline Node::Iterator Node::Edges() { return {this->GetLowNode().get()}; }
 
 // TODO(crem) Replace this with less hacky iterator once we support C++17.
 // This class has multiple hypostases within one class:
@@ -785,13 +781,17 @@ class VisitedNode_Iterator {
   // Creates "end()" iterator.
   VisitedNode_Iterator() {}
 
-  // Creates "begin()" iterator. Also happens to be a range constructor.
-  VisitedNode_Iterator(const Node& parent_node, Node* child_ptr)
-      : node_ptr_(child_ptr), total_count_(parent_node.GetNumEdges()) {
-    if (node_ptr_ != nullptr && node_ptr_->GetN() == 0) {
-      operator++();
+  // Creates "begin()" iterator.
+  VisitedNode_Iterator(LowNode* parent_node) {
+    if (parent_node != nullptr) {
+      node_ptr_ = parent_node->GetChild()->get();
+      total_count_ = parent_node->GetNumEdges();
+      if (node_ptr_ != nullptr && node_ptr_->GetN() == 0) {
+        operator++();
+      }
     }
   }
+
   // These are technically wrong, but are usable to compare with end().
   bool operator==(const VisitedNode_Iterator<is_const>& other) const {
     return node_ptr_ == other.node_ptr_;
@@ -830,10 +830,10 @@ class VisitedNode_Iterator {
 };
 
 inline VisitedNode_Iterator<true> Node::VisitedNodes() const {
-  return {*this, GetChild()};
+  return {this->GetLowNode().get()};
 }
 inline VisitedNode_Iterator<false> Node::VisitedNodes() {
-  return {*this, GetChild()};
+  return {this->GetLowNode().get()};
 }
 
 // Transposition Table type for holding references to all low nodes in DAG.
