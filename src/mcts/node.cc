@@ -210,6 +210,8 @@ void LowNode::MakeTerminal(GameResult result, float plies_left, Terminal type) {
     wl_ = -1.0f;
     d_ = 0.0f;
   }
+
+  assert(WLDMInvariantsHold());
 }
 
 void LowNode::MakeNotTerminal(const Node* node) {
@@ -243,6 +245,8 @@ void LowNode::MakeNotTerminal(const Node* node) {
     d_ /= n_;
     m_ /= n_;
   }
+
+  assert(WLDMInvariantsHold());
 }
 
 void LowNode::SetBounds(GameResult lower, GameResult upper) {
@@ -271,6 +275,8 @@ void Node::MakeTerminal(GameResult result, float plies_left, Terminal type) {
     // comparable to another non-loss choice. Force this by clearing the policy.
     SetP(0.0f);
   }
+
+  assert(WLDMInvariantsHold());
 }
 
 void Node::MakeNotTerminal(bool also_low_node) {
@@ -299,6 +305,8 @@ void Node::MakeNotTerminal(bool also_low_node) {
     d_ = 0.0f;
     m_ = 0.0f;
   }
+
+  assert(WLDMInvariantsHold());
 }
 
 void Node::SetBounds(GameResult lower, GameResult upper) {
@@ -325,6 +333,8 @@ void LowNode::FinalizeScoreUpdate(float v, float d, float m,
   d_ += multivisit * (d - d_) / (n_ + multivisit);
   m_ += multivisit * (m - m_) / (n_ + multivisit);
 
+  assert(WLDMInvariantsHold());
+
   // Increment N.
   n_ += multivisit;
 }
@@ -337,6 +347,8 @@ void LowNode::AdjustForTerminal(float v, float d, float m,
   wl_ += multivisit * v / n_;
   d_ += multivisit * d / n_;
   m_ += multivisit * m / n_;
+
+  assert(WLDMInvariantsHold());
 }
 
 void Node::FinalizeScoreUpdate(float v, float d, float m, uint32_t multivisit) {
@@ -344,6 +356,8 @@ void Node::FinalizeScoreUpdate(float v, float d, float m, uint32_t multivisit) {
   wl_ += multivisit * (v - wl_) / (n_ + multivisit);
   d_ += multivisit * (d - d_) / (n_ + multivisit);
   m_ += multivisit * (m - m_) / (n_ + multivisit);
+
+  assert(WLDMInvariantsHold());
 
   // Increment N.
   n_ += multivisit;
@@ -359,6 +373,8 @@ void Node::AdjustForTerminal(float v, float d, float m, uint32_t multivisit) {
   wl_ += multivisit * v / n_;
   d_ += multivisit * d / n_;
   m_ += multivisit * m / n_;
+
+  assert(WLDMInvariantsHold());
 }
 
 void Node::IncrementNInFlight(uint32_t multivisit) {
@@ -575,6 +591,32 @@ bool Node::ZeroNInFlight() const {
 void Node::SortEdges() const {
   assert(low_node_);
   low_node_->SortEdges();
+}
+
+static constexpr float wld_tolerance = 0.000001f;
+static constexpr float m_tolerance = 0.000001f;
+
+static bool WLDMInvariantsHold(float wl, float d, float m) {
+  return -(1.0f + wld_tolerance) < wl && wl < (1.0f + wld_tolerance) &&  //
+         -(0.0f + wld_tolerance) < d && d < (1.0f + wld_tolerance) &&    //
+         -(0.0f + m_tolerance) < m &&                                    //
+         std::abs(wl + d) < (1.0f + wld_tolerance);
+}
+
+bool Node::WLDMInvariantsHold() const {
+  if (lczero::WLDMInvariantsHold(GetWL(), GetD(), GetM())) return true;
+
+  std::cerr << DebugString() << std::endl;
+
+  return false;
+}
+
+bool LowNode::WLDMInvariantsHold() const {
+  if (lczero::WLDMInvariantsHold(GetWL(), GetD(), GetM())) return true;
+
+  std::cerr << DebugString() << std::endl;
+
+  return false;
 }
 
 /////////////////////////////////////////////////////////////////////////
