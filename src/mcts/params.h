@@ -54,7 +54,7 @@ class SearchParams {
   static void Populate(OptionsParser* options);
 
   // Parameter getters.
-  int GetMiniBatchSize() const { return kMiniBatchSize; }
+  uint32_t GetMiniBatchSize() const { return kMiniBatchSize; }
   int GetMaxPrefetchBatch() const {
     return options_.Get<int>(kMaxPrefetchBatchId);
   }
@@ -128,7 +128,7 @@ class SearchParams {
   float GetWDLRescaleRatio() const { return kWDLRescaleParams.ratio; }
   float GetWDLRescaleDiff() const { return kWDLRescaleParams.diff; }
   float GetWDLEvalObjectivity() const { return kWDLEvalObjectivity; }
-  int GetMaxOutOfOrderEvals() const { return kMaxOutOfOrderEvals; }
+  uint32_t GetMaxOutOfOrderEvals() const { return kMaxOutOfOrderEvals; }
   float GetNpsLimit() const { return kNpsLimit; }
 
   int GetTaskWorkersPerSearchWorker() const {
