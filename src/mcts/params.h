@@ -234,6 +234,7 @@ class SearchParams {
   static const OptionId kUCIOpponentId;
   static const OptionId kUCIRatingAdvId;
   static const OptionId kSearchSpinBackoffId;
+  static const OptionId kAnalyseModeId;
 
  private:
   const OptionsDict& options_;

@@ -58,7 +58,11 @@ FillEmptyHistory EncodeHistoryFill(std::string history_fill) {
   return FillEmptyHistory::NO;
 }
 
-ContemptPerspective EncodeContemptPerspective(std::string perspective) {
+ContemptPerspective EncodeContemptPerspective(std::string perspective,
+                                              bool analysis) {
+  if (perspective == "auto") {
+    return analysis ? ContemptPerspective::WHITE : ContemptPerspective::STM;
+  }
   if (perspective == "sidetomove") return ContemptPerspective::STM;
   if (perspective == "white") return ContemptPerspective::WHITE;
   if (perspective == "black") return ContemptPerspective::BLACK;
@@ -374,9 +378,10 @@ const OptionId SearchParams::kDrawScoreBlackId{
     "Adjustment, added to a draw score of a black player."};
 const OptionId SearchParams::kContemptPerspectiveId{
     "contempt-perspective", "ContemptPerspective",
-    "Affects the way asymmetric WDL parameters are applied. Default is "
-    "'sidetomove' for matches, use 'white' and 'black' for analysis. Use "
-    "'none' to deactivate contempt and the WDL conversion."};
+    "Affects the way asymmetric WDL parameters are applied. Default is 'auto' "
+    "which selects 'sidetomove' for matches, or 'white' in analysis mode. You "
+    "can also use 'black' for analysis or 'none' to deactivate contempt and "
+    "the WDL conversion."};
 const OptionId SearchParams::kContemptId{
     "contempt", "Contempt",
     "The simulated Elo advantage for the WDL conversion. Comma separated "
@@ -471,6 +476,9 @@ const OptionId SearchParams::kUCIRatingAdvId{
 const OptionId SearchParams::kSearchSpinBackoffId{
     "search-spin-backoff", "SearchSpinBackoff",
     "Enable backoff for the spin lock that acquires available searcher."};
+const OptionId SearchParams::kAnalyseModeId{
+    "analyse-mode", "UCI_AnalyseMode",
+    "Currently only used with contempt perspective."};
 
 void SearchParams::Populate(OptionsParser* options) {
   // Here the uci optimized defaults" are set.
@@ -542,10 +550,9 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<IntOption>(kDrawScoreOpponentId, -100, 100) = 0;
   options->Add<IntOption>(kDrawScoreWhiteId, -100, 100) = 0;
   options->Add<IntOption>(kDrawScoreBlackId, -100, 100) = 0;
-  std::vector<std::string> perspective = {"sidetomove", "white", "black",
-                                          "none"};
-  options->Add<ChoiceOption>(kContemptPerspectiveId, perspective) =
-      "sidetomove";
+  std::vector<std::string> perspective = {"auto", "sidetomove", "white",
+                                          "black", "none"};
+  options->Add<ChoiceOption>(kContemptPerspectiveId, perspective) = "auto";
   // The default kContemptId is empty, so the initial contempt value is taken
   // from kUCIRatingAdvId. Adding any value (without name) in the comma
   // separated kContemptId list will override this.
@@ -571,6 +578,7 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<StringOption>(kUCIOpponentId);
   options->Add<FloatOption>(kUCIRatingAdvId, -10000.0f, 10000.0f) = 0.0f;
   options->Add<BoolOption>(kSearchSpinBackoffId) = false;
+  options->Add<BoolOption>(kAnalyseModeId) = false;
 
   options->HideOption(kNoiseEpsilonId);
   options->HideOption(kNoiseAlphaId);
@@ -644,7 +652,8 @@ SearchParams::SearchParams(const OptionsDict& options)
       kDrawScoreWhite{options.Get<int>(kDrawScoreWhiteId) / 100.0f},
       kDrawScoreBlack{options.Get<int>(kDrawScoreBlackId) / 100.0f},
       kContemptPerspective(EncodeContemptPerspective(
-          options.Get<std::string>(kContemptPerspectiveId))),
+          options.Get<std::string>(kContemptPerspectiveId),
+          options.Get<bool>(kAnalyseModeId))),
       kContempt(GetContempt(options.Get<std::string>(kUCIOpponentId),
                             options.Get<std::string>(kContemptId),
                             options.Get<float>(kUCIRatingAdvId))),
@@ -685,8 +694,7 @@ SearchParams::SearchParams(const OptionsDict& options)
           options.Get<int>(kMaxCollisionVisitsScalingEndId)),
       kMaxCollisionVisitsScalingPower(
           options.Get<float>(kMaxCollisionVisitsScalingPowerId)),
-      kSearchSpinBackoff(
-          options_.Get<bool>(kSearchSpinBackoffId)) {
+      kSearchSpinBackoff(options_.Get<bool>(kSearchSpinBackoffId)) {
   if (std::max(std::abs(kDrawScoreSidetomove), std::abs(kDrawScoreOpponent)) +
           std::max(std::abs(kDrawScoreWhite), std::abs(kDrawScoreBlack)) >
       1.0f) {
