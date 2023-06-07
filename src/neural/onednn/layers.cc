@@ -33,13 +33,47 @@
 
 namespace lczero {
 
-namespace onednn_backend {
-
+namespace {
 #if DNNL_VERSION_MAJOR < 3
 #define APPEND_ELTWISE(A, B, C) append_eltwise(1.0f, A, B, C)
 #else
 #define APPEND_ELTWISE(A, B, C) append_eltwise(A, B, C)
 #endif
+
+void activation_post_ops(dnnl::post_ops* ops, ActivationFunction activation) {
+  switch (activation) {
+    case ACTIVATION_MISH:
+      ops->APPEND_ELTWISE(dnnl::algorithm::eltwise_mish, 0.0f, 0.0f);
+      break;
+    case ACTIVATION_RELU:
+      ops->APPEND_ELTWISE(dnnl::algorithm::eltwise_relu, 0.0f, 0.0f);
+      break;
+    case ACTIVATION_NONE:
+      break;
+    case ACTIVATION_TANH:
+      ops->APPEND_ELTWISE(dnnl::algorithm::eltwise_tanh, 0.0f, 0.0f);
+      break;
+    case ACTIVATION_SIGMOID:
+      ops->APPEND_ELTWISE(dnnl::algorithm::eltwise_logistic, 0.0f, 0.0f);
+      break;
+    case ACTIVATION_SELU:
+      ops->APPEND_ELTWISE(dnnl::algorithm::eltwise_elu, 1.67326324f, 0.0f);
+      ops->APPEND_ELTWISE(dnnl::algorithm::eltwise_linear, 1.05070098f, 0.0f);
+      break;
+    case ACTIVATION_SWISH:
+      ops->APPEND_ELTWISE(dnnl::algorithm::eltwise_swish, 1.0f, 0.0f);
+      break;
+    case ACTIVATION_RELU_2:
+      ops->APPEND_ELTWISE(dnnl::algorithm::eltwise_relu, 0.0f, 0.0f);
+      ops->APPEND_ELTWISE(dnnl::algorithm::eltwise_square, 0.0f, 0.0f);
+      break;
+    default:
+      throw Exception("Unsupported activation function.");
+  }
+}
+}  // namespace
+
+namespace onednn_backend {
 
 BaseLayer::BaseLayer(int c, int h, int w, BaseLayer* ip)
     : input_(ip), C(c), H(h), W(w) {
@@ -96,10 +130,10 @@ void ConvLayer::Eval(int N, dnnl::memory& output, const dnnl::memory& input,
     if (use_skip_) {
       conv_ops.append_sum();
     }
-    if (activation_ == ACTIVATION_RELU) {
-      conv_ops.APPEND_ELTWISE(dnnl::algorithm::eltwise_relu, 0.0f, 0.0f);
-    } else if (activation_ == ACTIVATION_TANH) {
-      conv_ops.APPEND_ELTWISE(dnnl::algorithm::eltwise_tanh, 0.0f, 0.0f);
+    // Apparently convolution doesn't go well with mish post op, so it will be
+    // handled with explicit ops.
+    if (activation_ != ACTIVATION_MISH) {
+      activation_post_ops(&conv_ops, activation_);
     }
     dnnl::primitive_attr conv_attr;
     conv_attr.set_scratchpad_mode(dnnl::scratchpad_mode::user);
@@ -127,7 +161,6 @@ void ConvLayer::Eval(int N, dnnl::memory& output, const dnnl::memory& input,
     in_md = conv_pd.src_desc();
     out_md = use_skip_ ? output.get_desc() : conv_pd.dst_desc();
 
-    // Apparently convolution doesn't go well with mish post op.
     if (activation_ == ACTIVATION_MISH) {
       dnnl::primitive_attr mish_attr;
       mish_attr.set_scratchpad_mode(dnnl::scratchpad_mode::user);
@@ -278,13 +311,7 @@ void SELayer::Eval(int N, dnnl::memory& output, const dnnl::memory& input,
     pool_out_md = pooling_pd.dst_desc();
 
     dnnl::post_ops fc_ops;
-    if (activation_ == ACTIVATION_RELU) {
-      fc_ops.APPEND_ELTWISE(dnnl::algorithm::eltwise_relu, 0.0f, 0.0f);
-    } else if (activation_ == ACTIVATION_MISH) {
-      fc_ops.APPEND_ELTWISE(dnnl::algorithm::eltwise_mish, 0.0f, 0.0f);
-    } else if (activation_ == ACTIVATION_TANH) {
-      fc_ops.APPEND_ELTWISE(dnnl::algorithm::eltwise_tanh, 0.0f, 0.0f);
-    }
+    activation_post_ops(&fc_ops, activation_);
     dnnl::primitive_attr fc_attr;
     fc_attr.set_scratchpad_mode(dnnl::scratchpad_mode::user);
     fc_attr.set_post_ops(fc_ops);
@@ -362,13 +389,7 @@ void SELayer::Eval(int N, dnnl::memory& output, const dnnl::memory& input,
     if (eng.get_kind() == dnnl::engine::kind::gpu) {
       // Using binary post-ops is a gain on gpu but a huge loss on cpu.
       mul_ops.append_binary(dnnl::algorithm::binary_add, pool_out_md);
-      if (activation_ == ACTIVATION_RELU) {
-        mul_ops.APPEND_ELTWISE(dnnl::algorithm::eltwise_relu, 0.0f, 0.0f);
-      } else if (activation_ == ACTIVATION_MISH) {
-        mul_ops.APPEND_ELTWISE(dnnl::algorithm::eltwise_mish, 0.0f, 0.0f);
-      } else if (activation_ == ACTIVATION_TANH) {
-        mul_ops.APPEND_ELTWISE(dnnl::algorithm::eltwise_tanh, 0.0f, 0.0f);
-      }
+      activation_post_ops(&mul_ops, activation_);
     }
     dnnl::primitive_attr mul_attr;
     mul_attr.set_scratchpad_mode(dnnl::scratchpad_mode::user);
@@ -390,13 +411,7 @@ void SELayer::Eval(int N, dnnl::memory& output, const dnnl::memory& input,
 
     if (eng.get_kind() != dnnl::engine::kind::gpu) {
       dnnl::post_ops add_ops;
-      if (activation_ == ACTIVATION_RELU) {
-        add_ops.APPEND_ELTWISE(dnnl::algorithm::eltwise_relu, 0.0f, 0.0f);
-      } else if (activation_ == ACTIVATION_MISH) {
-        add_ops.APPEND_ELTWISE(dnnl::algorithm::eltwise_mish, 0.0f, 0.0f);
-      } else if (activation_ == ACTIVATION_TANH) {
-        add_ops.APPEND_ELTWISE(dnnl::algorithm::eltwise_tanh, 0.0f, 0.0f);
-      }
+      activation_post_ops(&add_ops, activation_);
       dnnl::primitive_attr add_attr;
       add_attr.set_scratchpad_mode(dnnl::scratchpad_mode::user);
       add_attr.set_post_ops(add_ops);
@@ -561,13 +576,7 @@ void FCLayer::Eval(int N, dnnl::memory& output, const dnnl::memory& input,
                                        dnnl::memory::format_tag::any);
 
     dnnl::post_ops fc_ops;
-    if (activation_ == ACTIVATION_RELU) {
-      fc_ops.APPEND_ELTWISE(dnnl::algorithm::eltwise_relu, 0.0f, 0.0f);
-    } else if (activation_ == ACTIVATION_MISH) {
-      fc_ops.APPEND_ELTWISE(dnnl::algorithm::eltwise_mish, 0.0f, 0.0f);
-    } else if (activation_ == ACTIVATION_TANH) {
-      fc_ops.APPEND_ELTWISE(dnnl::algorithm::eltwise_tanh, 0.0f, 0.0f);
-    }
+    activation_post_ops(&fc_ops, activation_);
     dnnl::primitive_attr fc_attr;
     fc_attr.set_scratchpad_mode(dnnl::scratchpad_mode::user);
     fc_attr.set_post_ops(fc_ops);
@@ -686,8 +695,7 @@ void AttentionPolicyHead::Eval(int N, dnnl::memory& output,
                                      dnnl::memory::format_tag::nchw);
     dnnl::post_ops fc_ops;
     // SELU activation.
-    fc_ops.APPEND_ELTWISE(dnnl::algorithm::eltwise_elu, 1.67326324f, 0.0f);
-    fc_ops.APPEND_ELTWISE(dnnl::algorithm::eltwise_linear, 1.05070098f, 0.0f);
+    activation_post_ops(&fc_ops, ACTIVATION_SELU);
     dnnl::primitive_attr fc_attr;
     fc_attr.set_scratchpad_mode(dnnl::scratchpad_mode::user);
     fc_attr.set_post_ops(fc_ops);
