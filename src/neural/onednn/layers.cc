@@ -538,22 +538,15 @@ void SELayer::Eval(int N, dnnl::memory& output, const dnnl::memory& input,
   }
 }
 
-FCLayer::FCLayer(BaseLayer* ip, int C, int H, int W,
-                 ActivationFunction activation)
-    : BaseLayer(C, H, W, ip), activation_(activation) {}
-
 void FCLayer::LoadWeights(dnnl::memory& w1, dnnl::memory& b1,
                           const dnnl::engine& eng, const dnnl::stream& stream) {
-  const int num_outputs = C * H * W;
-
-  auto filter_md = dnnl::memory::desc(
-      {num_outputs, input_->GetC(), input_->GetH(), input_->GetW()}, data_type_,
-      dnnl::memory::format_tag::abcd);
+  auto filter_md = dnnl::memory::desc({C, c_input_}, data_type_,
+                                      dnnl::memory::format_tag::ab);
   filter_mem = dnnl::memory(filter_md, eng);
   dnnl::reorder(w1, filter_mem).execute(stream, w1, filter_mem);
 
-  auto bias_md = dnnl::memory::desc({num_outputs}, data_type_,
-                                    dnnl::memory::format_tag::a);
+  auto bias_md =
+      dnnl::memory::desc({C}, data_type_, dnnl::memory::format_tag::a);
   bias_mem = dnnl::memory(bias_md, eng);
   dnnl::reorder(b1, bias_mem).execute(stream, b1, bias_mem);
 }
@@ -562,19 +555,14 @@ void FCLayer::Eval(int N, dnnl::memory& output, const dnnl::memory& input,
                    const dnnl::memory& scratch, const dnnl::engine& eng,
                    const dnnl::stream& stream, dnnl::memory& scratchpad_mem) {
   if (last_batch_ != N) {
-    const int num_outputs = C * H * W;
-
-    auto t_in_md =
-        dnnl::memory::desc({N, input_->GetC(), input_->GetH(), input_->GetW()},
-                           data_type_, dnnl::memory::format_tag::any);
-
-    auto t_filter_md = dnnl::memory::desc(
-        {num_outputs, input_->GetC(), input_->GetH(), input_->GetW()},
-        data_type_, dnnl::memory::format_tag::any);
-
-    auto t_out_md = dnnl::memory::desc({N, C, H, W}, data_type_,
-                                       dnnl::memory::format_tag::any);
-
+    const int N2 =
+        N * input_->GetC() * input_->GetH() * input_->GetW() / c_input_;
+    auto t_in_md = dnnl::memory::desc({N2, c_input_}, data_type_,
+                                      dnnl::memory::format_tag::any);
+    auto t_filter_md = dnnl::memory::desc({C, c_input_}, data_type_,
+                                          dnnl::memory::format_tag::any);
+    auto t_out_md =
+        dnnl::memory::desc({N, C}, data_type_, dnnl::memory::format_tag::any);
     dnnl::post_ops fc_ops;
     activation_post_ops(&fc_ops, activation_);
     dnnl::primitive_attr fc_attr;
@@ -583,19 +571,20 @@ void FCLayer::Eval(int N, dnnl::memory& output, const dnnl::memory& input,
 #if DNNL_VERSION_MAJOR < 3
     auto fc_d = dnnl::inner_product_forward::desc(
         dnnl::prop_kind::forward_inference, t_in_md, t_filter_md,
-        bias_mem.get_desc(), t_out_md.reshape({N, num_outputs}));
+        bias_mem.get_desc(), t_out_md);
     auto fc_pd =
         dnnl::inner_product_forward::primitive_desc(fc_d, fc_attr, eng);
 #else
     auto fc_pd = dnnl::inner_product_forward::primitive_desc(
         eng, dnnl::prop_kind::forward_inference, t_in_md, t_filter_md,
-        bias_mem.get_desc(), t_out_md.reshape({N, num_outputs}), fc_attr);
+        bias_mem.get_desc(), t_out_md, fc_attr);
 #endif
     fc_ = dnnl::inner_product_forward(fc_pd);
     scratchpad_md = fc_pd.scratchpad_desc();
 
-    in_md = fc_pd.src_desc();
-    out_md = fc_pd.dst_desc().reshape({N, C, H, W});
+    in_md = fc_pd.src_desc().reshape(
+        {N, input_->GetC(), input_->GetH(), input_->GetW()});
+    out_md = fc_pd.dst_desc().reshape({N, C, 1, 1});
     if (fc_pd.weights_desc() != filter_mem.get_desc()) {
       auto tmp = dnnl::memory(fc_pd.weights_desc(), eng);
       dnnl::reorder(filter_mem, tmp).execute(stream, filter_mem, tmp);

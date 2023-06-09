@@ -425,11 +425,12 @@ class OnednnNetwork : public Network {
         convPol->LoadWeights(w_mem, b_mem, eng_, eng_stream_);
         layers_[idx].emplace_back(std::move(convPol));
 
-        auto FCPol = std::make_unique<FCLayer>(
-            getLastLayer(idx), kNumOutputPolicy, 1, 1, ACTIVATION_NONE);
-        w_md = dnnl::memory::desc({kNumOutputPolicy, pol_channels_, 8, 8},
+        auto FCPol =
+            std::make_unique<FCLayer>(getLastLayer(idx), kNumOutputPolicy,
+                                      pol_channels_ * 64, ACTIVATION_NONE);
+        w_md = dnnl::memory::desc({kNumOutputPolicy, pol_channels_ * 64},
                                   dnnl::memory::data_type::f32,
-                                  dnnl::memory::format_tag::abcd);
+                                  dnnl::memory::format_tag::ab);
         w_mem = dnnl::memory(w_md, cpu_eng_, &weights.ip_pol_w[0]);
         b_md =
             dnnl::memory::desc({kNumOutputPolicy}, dnnl::memory::data_type::f32,
@@ -459,10 +460,11 @@ class OnednnNetwork : public Network {
         layers_[idx].emplace_back(std::move(convVal));
 
         auto FCVal1 = std::make_unique<FCLayer>(
-            getLastLayer(idx), value_channels_, 1, 1, default_activation_);
-        w_md = dnnl::memory::desc({value_channels_, value_input_planes_, 8, 8},
+            getLastLayer(idx), value_channels_, value_input_planes_ * 64,
+            default_activation_);
+        w_md = dnnl::memory::desc({value_channels_, value_input_planes_ * 64},
                                   dnnl::memory::data_type::f32,
-                                  dnnl::memory::format_tag::abcd);
+                                  dnnl::memory::format_tag::ab);
         w_mem = dnnl::memory(w_md, cpu_eng_, &weights.ip1_val_w[0]);
         b_md =
             dnnl::memory::desc({value_channels_}, dnnl::memory::data_type::f32,
@@ -476,11 +478,11 @@ class OnednnNetwork : public Network {
         auto fc2_tanh = !wdl_;
 
         auto FCVal2 = std::make_unique<FCLayer>(
-            getLastLayer(idx), wdl_ ? 3 : 1, 1, 1,
+            getLastLayer(idx), wdl_ ? 3 : 1, value_channels_,
             fc2_tanh ? ACTIVATION_TANH : ACTIVATION_NONE);
-        w_md = dnnl::memory::desc({wdl_ ? 3 : 1, value_channels_, 1, 1},
+        w_md = dnnl::memory::desc({wdl_ ? 3 : 1, value_channels_},
                                   dnnl::memory::data_type::f32,
-                                  dnnl::memory::format_tag::abcd);
+                                  dnnl::memory::format_tag::ab);
         w_mem = dnnl::memory(w_md, cpu_eng_, &weights.ip2_val_w[0]);
         b_md = dnnl::memory::desc({wdl_ ? 3 : 1}, dnnl::memory::data_type::f32,
                                   dnnl::memory::format_tag::a);
@@ -515,10 +517,11 @@ class OnednnNetwork : public Network {
         layers_[idx].emplace_back(std::move(convMov));
 
         auto FCMov1 = std::make_unique<FCLayer>(
-            getLastLayer(idx), moves_channels_, 1, 1, default_activation_);
-        w_md = dnnl::memory::desc({moves_channels_, moves_input_planes_, 8, 8},
+            getLastLayer(idx), moves_channels_, moves_input_planes_ * 64,
+            default_activation_);
+        w_md = dnnl::memory::desc({moves_channels_, moves_input_planes_ * 64},
                                   dnnl::memory::data_type::f32,
-                                  dnnl::memory::format_tag::abcd);
+                                  dnnl::memory::format_tag::ab);
         w_mem = dnnl::memory(w_md, cpu_eng_, &weights.ip1_mov_w[0]);
         b_md =
             dnnl::memory::desc({moves_channels_}, dnnl::memory::data_type::f32,
@@ -527,11 +530,11 @@ class OnednnNetwork : public Network {
         FCMov1->LoadWeights(w_mem, b_mem, eng_, eng_stream_);
         layers_[idx].emplace_back(std::move(FCMov1));
 
-        auto FCMov2 = std::make_unique<FCLayer>(getLastLayer(idx), 1, 1, 1,
-                                                default_activation_);
-        w_md = dnnl::memory::desc({1, moves_channels_, 1, 1},
+        auto FCMov2 = std::make_unique<FCLayer>(
+            getLastLayer(idx), 1, moves_channels_, default_activation_);
+        w_md = dnnl::memory::desc({1, moves_channels_},
                                   dnnl::memory::data_type::f32,
-                                  dnnl::memory::format_tag::abcd);
+                                  dnnl::memory::format_tag::ab);
         w_mem = dnnl::memory(w_md, cpu_eng_, &weights.ip2_mov_w[0]);
         b_md = dnnl::memory::desc({1}, dnnl::memory::data_type::f32,
                                   dnnl::memory::format_tag::a);

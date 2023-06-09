@@ -100,7 +100,8 @@ class ConvLayer : public BaseLayer {
 
 class FCLayer : public BaseLayer {
  public:
-  FCLayer(BaseLayer* ip, int C, int H, int W, ActivationFunction activation);
+  FCLayer(BaseLayer* ip, int C, int Cin, ActivationFunction activation)
+      : BaseLayer(C, 1, 1, ip), c_input_(Cin), activation_(activation) {}
 
   void LoadWeights(dnnl::memory& w1, dnnl::memory& b1, const dnnl::engine& eng,
                    const dnnl::stream& stream);
@@ -109,7 +110,8 @@ class FCLayer : public BaseLayer {
             const dnnl::stream& stream, dnnl::memory& scratchpad_mem) override;
 
  private:
-  ActivationFunction activation_;
+  const int c_input_;
+  const ActivationFunction activation_;
 
   dnnl::memory filter_mem;
   dnnl::memory bias_mem;
@@ -190,7 +192,7 @@ class AttentionPolicyHead : public BaseLayer {
  private:
   const int embedding_size_;
   const int policy_d_model_;
-  ActivationFunction activation_;
+  const ActivationFunction activation_;
 
   dnnl::memory fc_filter_mem;
   dnnl::memory fc_bias_mem;
