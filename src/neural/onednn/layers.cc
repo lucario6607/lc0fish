@@ -694,8 +694,7 @@ void AttentionPolicyHead::Eval(int N, dnnl::memory& output,
     auto foo_md = dnnl::memory::desc({N, H, W, C}, data_type_,
                                      dnnl::memory::format_tag::nchw);
     dnnl::post_ops fc_ops;
-    // SELU activation.
-    activation_post_ops(&fc_ops, ACTIVATION_SELU);
+    activation_post_ops(&fc_ops, activation_);
     dnnl::primitive_attr fc_attr;
     fc_attr.set_scratchpad_mode(dnnl::scratchpad_mode::user);
     fc_attr.set_post_ops(fc_ops);

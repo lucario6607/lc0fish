@@ -350,7 +350,7 @@ class OnednnNetwork : public Network {
         const int policy_d_model = weights.ip2_pol_b.size();
 
         auto attn = std::make_unique<AttentionPolicyHead>(
-            resi_last, embedding_size, policy_d_model);
+            resi_last, embedding_size, policy_d_model, ACTIVATION_SELU);
         auto ip_w_md = dnnl::memory::desc({numFilters_, embedding_size},
                                           dnnl::memory::data_type::f32,
                                           dnnl::memory::format_tag::ab);

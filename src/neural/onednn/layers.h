@@ -174,10 +174,11 @@ class SELayer : public BaseLayer {
 class AttentionPolicyHead : public BaseLayer {
  public:
   AttentionPolicyHead(BaseLayer* ip, const int embedding_size,
-                      const int policy_d_model)
+                      const int policy_d_model, ActivationFunction activation)
       : BaseLayer(ip->GetC(), ip->GetH(), ip->GetW(), ip),
         embedding_size_(embedding_size),
-        policy_d_model_(policy_d_model) {}
+        policy_d_model_(policy_d_model),
+        activation_(activation) {}
   void LoadWeights(dnnl::memory& w1, dnnl::memory& b1, dnnl::memory& w2,
                    dnnl::memory& b2, dnnl::memory& w3, dnnl::memory& b3,
                    dnnl::memory& w4, const dnnl::engine& eng,
@@ -189,6 +190,7 @@ class AttentionPolicyHead : public BaseLayer {
  private:
   const int embedding_size_;
   const int policy_d_model_;
+  ActivationFunction activation_;
 
   dnnl::memory fc_filter_mem;
   dnnl::memory fc_bias_mem;
