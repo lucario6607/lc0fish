@@ -394,6 +394,9 @@ class Node {
   // the perspective of the player-to-move for the position. WL stands for "W
   // minus L". Is equal to Q if draw score is 0.
   double wl_ = 0.0f;
+  // Averaged draw probability. Works similarly to WL, except that D is not
+  // flipped depending on the side to move.
+  double d_ = 0.0f;
 
   // 8 byte fields on 64-bit platforms, 4 byte on 32-bit.
   // Pointer to the low node.
@@ -402,9 +405,6 @@ class Node {
   atomic_unique_ptr<Node> sibling_;
 
   // 4 byte fields.
-  // Averaged draw probability. Works similarly to WL, except that D is not
-  // flipped depending on the side to move.
-  float d_ = 0.0f;
   // Estimated remaining plies.
   float m_ = 0.0f;
   // How many completed visits this node had.
@@ -450,8 +450,8 @@ class LowNode {
   // For non-TT nodes.
   LowNode(const LowNode& p)
       : wl_(p.wl_),
-        hash_(p.hash_),
         d_(p.d_),
+        hash_(p.hash_),
         m_(p.m_),
         num_edges_(p.num_edges_),
         terminal_type_(Terminal::NonTerminal),
@@ -595,6 +595,9 @@ class LowNode {
   // perspective of the player-to-move for the position.
   // WL stands for "W minus L". Is equal to Q if draw score is 0.
   double wl_ = 0.0f;
+  // Averaged draw probability. Works similarly to WL, except that D is not
+  // flipped depending on the side to move.
+  double d_ = 0.0f;
   // Position hash and a TT key.
   uint64_t hash_ = 0;
 
@@ -605,9 +608,6 @@ class LowNode {
   atomic_unique_ptr<Node> child_;
 
   // 4 byte fields.
-  // Averaged draw probability. Works similarly to WL, except that D is not
-  // flipped depending on the side to move.
-  float d_ = 0.0f;
   // Estimated remaining plies.
   float m_ = 0.0f;
   // How many completed visits this node had.
