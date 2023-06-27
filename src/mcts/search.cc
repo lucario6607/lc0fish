@@ -1147,7 +1147,7 @@ void SearchWorker::ExecuteOneIteration() {
 
       int available =
           search_->pending_searchers_.load(std::memory_order_acquire);
-      if (available == 0) {
+      if (available <= 0) {
         spin_helper->Wait();
         continue;
       }
