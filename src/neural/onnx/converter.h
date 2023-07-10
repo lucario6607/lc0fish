@@ -45,6 +45,7 @@ struct WeightsToOnnxConverterOptions {
   int opset = 17;
   bool alt_mish = false;
   bool alt_ln = false;
+  int attention = 0;
 };
 
 // Converts "classical" weights file to weights file with embedded ONNX model.

@@ -124,6 +124,13 @@ class OnnxBuilder {
   std::string Mish(const std::string& name, const std::string& input);
   std::string Sqrt(const std::string& name, const std::string& input);
   std::string Reciprocal(const std::string& name, const std::string& input);
+  std::string Attention(const std::string& name, const std::string& input,
+                        const std::string& weights, const std::string& bias,
+                        const std::string& rel_pos_bias, int heads);
+  std::string MultiHeadAttention(const std::string& name, const std::string& Q,
+                                 const std::string& K, const std::string& V,
+                                 const std::string& bias,
+                                 const std::string& rel_pos_bias, int heads);
   // Returns ONNX model as protobuf.
   const pblczero::ModelProto& as_proto() const { return model_; }
   // Returns serialized model.
@@ -132,6 +139,7 @@ class OnnxBuilder {
  private:
   const int opset_;
   pblczero::ModelProto model_;
+  bool import_com_microsoft_ = true;
 };
 
 }  // namespace lczero
