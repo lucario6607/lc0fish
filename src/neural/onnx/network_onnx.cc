@@ -117,6 +117,7 @@ class OnnxNetwork : public Network {
   static constexpr int max_batch_size_ = 1024;
   // For conditional locking if running the DML provider.
   OnnxProvider provider_;
+  bool needs_locking_ = false;
   std::mutex lock_;
 };
 
@@ -240,22 +241,12 @@ void OnnxComputation<DataType>::ComputeBlocking() {
     int batch = batch_size * step;
 
     auto input_tensor = PrepareInputs(i, batch);
-    // The DML onnxruntime execution provider is documented as not supporting
-    // multi-threaded calls to Run on the same inference session. We found the
-    // same to be true for the ROCm execution provider (at least for CNNs).
-    // TODO: This may be a onnxruntime/ROCm bug, check onnxruntime 1.16 release.
-    if (network_->provider_ == OnnxProvider::DML ||
-        network_->provider_ == OnnxProvider::ROCM) {
-      network_->lock_.lock();
-    }
+    if (network_->needs_locking_) network_->lock_.lock();
     network_->session_[step - 1].Run(
         {}, network_->inputs_cstr_.data(), &input_tensor, 1,
         network_->outputs_cstr_.data(), output_tensors_.data(),
         output_tensors_.size());
-    if (network_->provider_ == OnnxProvider::DML ||
-        network_->provider_ == OnnxProvider::ROCM) {
-      network_->lock_.unlock();
-    }
+    if (network_->needs_locking_) network_->lock_.unlock();
     i += batch;
   }
 }
@@ -362,6 +353,26 @@ OnnxNetwork::OnnxNetwork(const WeightsFile& file, const OptionsDict&,
   std::transform(outputs_.begin(), outputs_.end(),
                  std::back_inserter(outputs_cstr_),
                  [](const auto& x) { return x.c_str(); });
+
+  // Check if we need locking.
+  if (provider_ == OnnxProvider::DML) {
+    // The DML onnxruntime execution provider is documented as not supporting
+    // multi-threaded calls to Run on the same inference session.
+    needs_locking_ = true;
+  } else if (provider_ == OnnxProvider::ROCM) {
+    // We found the ROCm execution provider requires locking if the model
+    // contains convolutions.
+    // TODO: Seems like an onnxruntime/ROCm bug, check onnxruntime 1.16 release.
+    pblczero::ModelProto model;
+    model.ParseFromString(file.onnx_model().model());
+    for (auto& node : model.graph().node()) {
+      if (node.has_op_type() && node.op_type() == "Conv") {
+        CERR << "Model contains 'Conv' operators, locking enabled";
+        needs_locking_ = true;
+        break;
+      }
+    }
+  }
 }
 
 template <OnnxProvider kProvider>
