@@ -401,11 +401,6 @@ std::string Converter::MakeEncoderLayer(
     const std::string& name, ActivationFunction activation, float alpha) {
   const int d_model = layer.mha.q_b.size();
   std::string flow;
-  std::string smolgen_weights;
-  if (layer.mha.has_smolgen) {
-    smolgen_weights =
-        MakeSmolgen(builder, layer, embedding_size, heads, encoder_in, name);
-  }
   if (options_.attention == 0) {
     const int depth = d_model / heads;
     auto mha_shape =
@@ -443,6 +438,8 @@ std::string Converter::MakeEncoderLayer(
     }
     flow = builder->Mul(name + "/mha/QK/scale", flow, *scale);
     if (layer.mha.has_smolgen) {
+      auto smolgen_weights =
+          MakeSmolgen(builder, layer, embedding_size, heads, encoder_in, name);
       flow = builder->Add(name + "/smolgen_weights", flow, smolgen_weights);
     }
     flow = builder->Softmax(name + "/mha/QK/softmax", flow, 3);
@@ -466,6 +463,11 @@ std::string Converter::MakeEncoderLayer(
     auto merge_b = layer.mha.q_b;
     merge_b.insert(merge_b.end(), layer.mha.k_b.begin(), layer.mha.k_b.end());
     merge_b.insert(merge_b.end(), layer.mha.v_b.begin(), layer.mha.v_b.end());
+    std::string smolgen_weights;
+    if (layer.mha.has_smolgen) {
+      smolgen_weights =
+          MakeSmolgen(builder, layer, embedding_size, heads, encoder_in, name);
+    }
     flow = builder->Attention(
         name + "/mha", flow,
         builder->AddInitializer(
@@ -497,6 +499,11 @@ std::string Converter::MakeEncoderLayer(
     auto merge_b = layer.mha.q_b;
     merge_b.insert(merge_b.end(), layer.mha.k_b.begin(), layer.mha.k_b.end());
     merge_b.insert(merge_b.end(), layer.mha.v_b.begin(), layer.mha.v_b.end());
+    std::string smolgen_weights;
+    if (layer.mha.has_smolgen) {
+      smolgen_weights =
+          MakeSmolgen(builder, layer, embedding_size, heads, encoder_in, name);
+    }
     flow = builder->MultiHeadAttention(
         name + "/mha", Q, K, V,
         builder->AddInitializer(name + "/mha/QKV/b",
