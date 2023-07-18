@@ -82,7 +82,7 @@ class OnnxComputation : public NetworkComputation {
 class OnnxNetwork : public Network {
  public:
   OnnxNetwork(const WeightsFile& file, const OptionsDict& options,
-              OnnxProvider provider, int gpu, int threads, bool fp16,
+              OnnxProvider provider, int gpu, int threads, bool fp16, bool lock,
               int batch_size, int steps);
   std::unique_ptr<NetworkComputation> NewComputation() override {
     if (fp16_) {
@@ -304,14 +304,15 @@ Ort::SessionOptions GetOptions(OnnxProvider provider, int gpu, int threads,
 
 OnnxNetwork::OnnxNetwork(const WeightsFile& file, const OptionsDict&,
                          OnnxProvider provider, int gpu, int threads, bool fp16,
-                         int batch_size, int steps)
+                         bool lock, int batch_size, int steps)
     : onnx_env_(ORT_LOGGING_LEVEL_WARNING, "lc0"),
       steps_(steps),
       capabilities_{file.format().network_format().input(),
                     file.format().network_format().moves_left()},
       fp16_(fp16),
       batch_size_(batch_size),
-      provider_(provider) {
+      provider_(provider),
+      needs_locking_(lock) {
   // Sanity checks.
   if (batch_size_ < 0) steps_ = 1;
   if (batch_size_ * steps > max_batch_size_) {
@@ -359,21 +360,6 @@ OnnxNetwork::OnnxNetwork(const WeightsFile& file, const OptionsDict&,
     // The DML onnxruntime execution provider is documented as not supporting
     // multi-threaded calls to Run on the same inference session.
     needs_locking_ = true;
-  } else if (provider_ == OnnxProvider::ROCM) {
-    // We found the ROCm execution provider requires locking if the model
-    // contains convolutions.
-    // TODO: Seems like an onnxruntime/ROCm bug, check onnxruntime 1.16 release.
-    pblczero::ModelProto model;
-    model.ParseFromString(file.onnx_model().model());
-    for (auto& node : model.graph().node()) {
-      if (!node.has_op_type()) continue;
-      if (node.op_type() == "Conv" || node.op_type() == "GlobalAveragePool" ||
-          node.op_type() == "Squeeze" || node.op_type() == "Selu" ||
-          node.op_type() == "Softplus" || node.op_type() == "Tanh") {
-        needs_locking_ = true;
-        break;
-      }
-    }
   }
 }
 
@@ -393,6 +379,8 @@ std::unique_ptr<Network> MakeOnnxNetwork(const std::optional<WeightsFile>& w,
   int threads =
       opts.GetOrDefault<int>("threads", kProvider == OnnxProvider::CPU ? 1 : 0);
 
+  bool lock = opts.GetOrDefault<bool>("lock", false);
+
   if (batch_size <= 0) batch_size = -1;  // Variable batch size.
 
   bool fp16 = opts.GetOrDefault<bool>(
@@ -400,7 +388,7 @@ std::unique_ptr<Network> MakeOnnxNetwork(const std::optional<WeightsFile>& w,
 
   if (w->has_onnx_model()) {
     return std::make_unique<OnnxNetwork>(*w, opts, kProvider, gpu, threads,
-                                         false, batch_size, steps);
+                                         false, lock, batch_size, steps);
   } else {
     if (w->format().network_format().network() !=
             pblczero::NetworkFormat::NETWORK_CLASSICAL_WITH_HEADFORMAT &&
@@ -454,7 +442,8 @@ std::unique_ptr<Network> MakeOnnxNetwork(const std::optional<WeightsFile>& w,
 
     auto converted = ConvertWeightsToOnnx(*w, converter_options);
     return std::make_unique<OnnxNetwork>(converted, opts, kProvider, gpu,
-                                         threads, fp16, batch_size, steps);
+                                         threads, fp16, lock, batch_size,
+                                         steps);
   }
 }
 
