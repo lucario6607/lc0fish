@@ -515,17 +515,9 @@ if get_option('build_backends')
       endif
       foreach x : nvcc_sm_list
         if nvcc_help.contains('sm_' + x)
-          nvcc_extra_args += '-gencode=arch=compute_' + x + ',code=sm_' + x
+          nvcc_extra_args += '-gencode=arch=compute_' + x + ',code=compute_' + x
         endif
       endforeach
-      # For forward compatibility.
-      if nvcc_help.contains('sm_90') # Cuda 12+
-        nvcc_extra_args += '-gencode=arch=compute_90,code=compute_90'
-      elif nvcc_help.contains('sm_80') # Cuda 11+
-        nvcc_extra_args += '-gencode=arch=compute_80,code=compute_80'
-      elif nvcc_help.contains('sm_75') # Cuda 10+
-        nvcc_extra_args += '-gencode=arch=compute_75,code=compute_75'
-      endif
     endif
     files += custom_target('cuda fp16 code',
       input : 'src/neural/cuda/fp16_kernels.cu',
