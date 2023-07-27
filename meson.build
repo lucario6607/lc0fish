@@ -510,21 +510,17 @@ if get_option('build_backends')
     # Handling of fp16 cuda code: If nvcc_extra_args is empty add options to
     # generate code for the major fp16 capable architectures.
     if nvcc_extra_args == []
-      nvcc_arch = '-arch=compute_70'
-      nvcc_sm_list = ['sm_70', 'sm_75', 'sm_80', 'sm_89', 'sm_90']
+      nvcc_sm_list = ['70', '75', '80', '89', '90']
       if host_machine.system() != 'windows'
-        nvcc_arch = '-arch=compute_60'
-        nvcc_sm_list += ['sm_60']
+        nvcc_sm_list += ['60']
         if ['arm', 'aarch64'].contains(host_machine.cpu_family())
           message('Compiling for Jetson.')
-          nvcc_arch = '-arch=compute_53'
-          nvcc_sm_list = ['sm_53', 'sm_62', 'sm_72', 'sm_87']
+          nvcc_sm_list = ['53', '62', '72', '87']
         endif
       endif
-      nvcc_extra_args = [nvcc_arch]
       foreach x : nvcc_sm_list
-        if nvcc_help.contains(x)
-          nvcc_extra_args += '-code=' + x
+        if nvcc_help.contains('sm_' + x)
+          nvcc_extra_args += '-gencode=arch=compute_' + x + ',code=sm_' + x
         endif
       endforeach
       # For forward compatibility.
