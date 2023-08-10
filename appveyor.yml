@@ -118,7 +118,7 @@ before_build:
 - cmd: IF %APPVEYOR_REPO_TAG%==true IF %ANDROID%==true SET EMBED=true
 - cmd: SET POPCNT=true
 - cmd: IF %NAME%==cpu-openblas SET POPCNT=false
-- cmd: SET F16C=true
+- cmd: SET F16C=false
 - cmd: IF %NAME%==cpu-openblas SET F16C=false
 - cmd: IF %CUDA%==true SET F16C=false
 - cmd: SET EXTRA=
