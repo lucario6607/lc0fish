@@ -120,6 +120,10 @@ class OnnxBuilder {
   std::string Where(const std::string& name, const std::string& input1,
                     const std::string& input2, const std::string& input3);
   std::string Mish(const std::string& name, const std::string& input);
+  std::string Cast(const std::string& name, const std::string& input,
+                   pblczero::TensorProto::DataType type);
+  std::string Equal(const std::string& name, const std::string& input1,
+                    const std::string& input2);
   // Returns ONNX model as protobuf.
   const pblczero::ModelProto& as_proto() const { return model_; }
   // Returns serialized model.
