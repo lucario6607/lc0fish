@@ -37,7 +37,8 @@
 
 namespace lczero {
 
-OnnxBuilder::OnnxBuilder(int opset) : opset_(opset) {
+OnnxBuilder::OnnxBuilder(int opset, int stash_type)
+    : opset_(opset), stash_type_(stash_type) {
   if (opset < 7 || opset > 18) {
     throw Exception("Only ONNX opsets between 7 and 18 are supported.");
   }
@@ -372,6 +373,7 @@ std::string OnnxBuilder::LayerNormalization(const std::string& name,
   node->add_input(AddInitializer(name + "/w/bias", bias));
   AddIntAttribute(node, "axis", axis);
   AddFloatAttribute(node, "epsilon", epsilon);
+  AddIntAttribute(node, "stash_type", stash_type_);
   return out;
 }
 

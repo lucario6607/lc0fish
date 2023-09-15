@@ -43,6 +43,7 @@ struct WeightsToOnnxConverterOptions {
   std::string output_mlh = "/output/mlh";
   int batch_size = -1;
   int opset = 17;
+  int stash_type = 1;
   bool alt_mish = false;
 };
 

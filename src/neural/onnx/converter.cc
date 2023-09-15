@@ -846,7 +846,7 @@ void Converter::MakeMovesLeftHead(pblczero::OnnxModel* onnx,
 
 void Converter::GenerateOnnx(pblczero::OnnxModel* onnx) {
   LegacyWeights weights(src_.weights());
-  OnnxBuilder builder(options_.opset);
+  OnnxBuilder builder(options_.opset, options_.stash_type);
 
   onnx->set_input_planes(options_.input_planes_name);
   builder.AddInput(options_.input_planes_name, {options_.batch_size, 112, 8, 8},
