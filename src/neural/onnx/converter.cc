@@ -173,9 +173,16 @@ std::unique_ptr<OnnxConst> Converter::GetWeghtsConverter(
 
 std::string Converter::MakeMish(OnnxBuilder* builder, const std::string& input,
                                 const std::string& name) {
-  if (!options_.alt_mish || options_.opset < 9 ||
-      options_.data_type_ !=
-          WeightsToOnnxConverterOptions::DataType::kFloat32) {
+  if (options_.safe_mish) {
+    auto cast =
+        builder->Cast(name + "/float", input, pblczero::TensorProto::FLOAT);
+    auto flow = builder->Softplus(name + "/softplus", cast);
+    flow = builder->Tanh(name + "/tanh", flow);
+    flow = builder->Mul(name + "/mul", flow, cast);
+    return builder->Cast(name, flow, GetDataType());
+  } else if (!options_.alt_mish || options_.opset < 9 ||
+             options_.data_type_ !=
+                 WeightsToOnnxConverterOptions::DataType::kFloat32) {
     if (options_.opset >= 18) return builder->Mish(name, input);
     auto flow = builder->Softplus(name + "/softplus", input);
     flow = builder->Tanh(name + "/tanh", flow);

@@ -438,4 +438,12 @@ std::string OnnxBuilder::Mish(const std::string& name,
   return PopulateStdNodeFields(node, name, input, "Mish");
 }
 
+std::string OnnxBuilder::Cast(const std::string& name, const std::string& input,
+                              pblczero::TensorProto::DataType type) {
+  auto* node = model_.mutable_graph()->add_node();
+  auto out = PopulateStdNodeFields(node, name, input, "Cast");
+  AddIntAttribute(node, "to", type);
+  return out;
+}
+
 }  // namespace lczero
