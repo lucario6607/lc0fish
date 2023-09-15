@@ -171,6 +171,12 @@ std::unique_ptr<OnnxConst> Converter::GetWeghtsConverter(
                   " is not supported in weights converter");
 }
 
+std::unique_ptr<OnnxConst> FloatConverter(
+    const std::vector<float>& weights, std::initializer_list<int> dims,
+    std::initializer_list<int> order = {}) {
+  return std::make_unique<FloatOnnxWeightsAdapter>(weights, dims, order);
+}
+
 std::string Converter::MakeMish(OnnxBuilder* builder, const std::string& input,
                                 const std::string& name) {
   if (!options_.alt_mish || options_.opset < 9 ||
@@ -320,11 +326,14 @@ std::string Converter::MakeSmolgen(OnnxBuilder* builder,
       name + "/smolgen/dense1/b", flow,
       *GetWeghtsConverter(layer.mha.smolgen.dense1_b, {smolgen_hidden_sz}));
   flow = MakeActivation(builder, flow, name + "/smolgen/dense1", activation);
+  flow = builder->Cast(name + "/smolgen/ln1/float", flow,
+                       pblczero::TensorProto::FLOAT);
   flow = builder->LayerNormalization(
       name + "/smolgen/ln1", flow,
-      *GetWeghtsConverter(layer.mha.smolgen.ln1_gammas, {smolgen_hidden_sz}),
-      *GetWeghtsConverter(layer.mha.smolgen.ln1_betas, {smolgen_hidden_sz}), 1,
+      *FloatConverter(layer.mha.smolgen.ln1_gammas, {smolgen_hidden_sz}),
+      *FloatConverter(layer.mha.smolgen.ln1_betas, {smolgen_hidden_sz}), 1,
       1e-3);
+  flow = builder->Cast(name + "/smolgen/ln1/data_type", flow, GetDataType());
   flow = builder->MatMul(
       name + "/smolgen/dense2/w", flow,
       *GetWeghtsConverter(layer.mha.smolgen.dense2_w,
@@ -333,13 +342,14 @@ std::string Converter::MakeSmolgen(OnnxBuilder* builder,
                       *GetWeghtsConverter(layer.mha.smolgen.dense2_b,
                                           {smolgen_gen_sz * heads}));
   flow = MakeActivation(builder, flow, name + "/smolgen/dense2", activation);
+  flow = builder->Cast(name + "/smolgen/ln2/float", flow,
+                       pblczero::TensorProto::FLOAT);
   flow = builder->LayerNormalization(
       name + "/smolgen/ln2", flow,
-      *GetWeghtsConverter(layer.mha.smolgen.ln2_gammas,
-                          {smolgen_gen_sz * heads}),
-      *GetWeghtsConverter(layer.mha.smolgen.ln2_betas,
-                          {smolgen_gen_sz * heads}),
-      1, 1e-3);
+      *FloatConverter(layer.mha.smolgen.ln2_gammas, {smolgen_gen_sz * heads}),
+      *FloatConverter(layer.mha.smolgen.ln2_betas, {smolgen_gen_sz * heads}), 1,
+      1e-3);
+  flow = builder->Cast(name + "/smolgen/ln2/data_type", flow, GetDataType());
   flow =
       builder->Reshape(name + "/smolgen/gen_from/reshape", flow,
                        builder->AddInitializer(
@@ -431,10 +441,13 @@ std::string Converter::MakeEncoderLayer(
   }
   flow = builder->Add(name + "/mha/out/skip", flow, alpha_in);
 
-  auto ffn_in = builder->LayerNormalization(
-      name + "/ln1", flow,
-      *GetWeghtsConverter(layer.ln1_gammas, {embedding_size}),
-      *GetWeghtsConverter(layer.ln1_betas, {embedding_size}), 1);
+  auto ffn_in =
+      builder->Cast(name + "/ln1/float", flow, pblczero::TensorProto::FLOAT);
+  ffn_in = builder->LayerNormalization(
+      name + "/ln1", ffn_in,
+      *FloatConverter(layer.ln1_gammas, {embedding_size}),
+      *FloatConverter(layer.ln1_betas, {embedding_size}), 1);
+  ffn_in = builder->Cast(name + "/ln1/data_type", ffn_in, GetDataType());
   const int dff_size = layer.ffn.dense1_b.size();
   flow =
       builder->MatMul(name + "/ffn/dense1/w", ffn_in,
@@ -462,10 +475,11 @@ std::string Converter::MakeEncoderLayer(
     alpha_ffn_in = ffn_in;
   }
   flow = builder->Add(name + "/ffn/skip", flow, alpha_ffn_in);
+  flow = builder->Cast(name + "/ln2/float", flow, pblczero::TensorProto::FLOAT);
   flow = builder->LayerNormalization(
-      name + "/ln2", flow,
-      *GetWeghtsConverter(layer.ln2_gammas, {embedding_size}),
-      *GetWeghtsConverter(layer.ln2_betas, {embedding_size}), 1);
+      name + "/ln2", flow, *FloatConverter(layer.ln2_gammas, {embedding_size}),
+      *FloatConverter(layer.ln2_betas, {embedding_size}), 1);
+  flow = builder->Cast(name + "/ln2/data_type", flow, GetDataType());
   return flow;
 }
 
