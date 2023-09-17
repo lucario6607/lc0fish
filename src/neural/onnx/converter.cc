@@ -462,10 +462,20 @@ std::string Converter::MakeEncoderLayer(
     alpha_ffn_in = ffn_in;
   }
   flow = builder->Add(name + "/ffn/skip", flow, alpha_ffn_in);
-  flow = builder->LayerNormalization(
-      name + "/ln2", flow,
-      *GetWeghtsConverter(layer.ln2_gammas, {embedding_size}),
-      *GetWeghtsConverter(layer.ln2_betas, {embedding_size}), 1);
+  if (ffn_activation != ACTIVATION_RELU_2) {
+    flow = builder->LayerNormalization(
+        name + "/ln2", flow,
+        *GetWeghtsConverter(layer.ln2_gammas, {embedding_size}),
+        *GetWeghtsConverter(layer.ln2_betas, {embedding_size}), 1);
+  } else {
+    flow = builder->Cast(name + "/ln2/to_float", flow,
+                         pblczero::TensorProto::FLOAT);
+    flow = builder->LayerNormalization(
+        name + "/ln2", flow,
+        FloatOnnxWeightsAdapter(layer.ln2_gammas, {embedding_size}),
+        FloatOnnxWeightsAdapter(layer.ln2_betas, {embedding_size}), 1);
+    flow = builder->Cast(name + "/ln2/to_data_type", flow, GetDataType());
+  }
   return flow;
 }
 
