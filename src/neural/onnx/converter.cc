@@ -27,6 +27,7 @@
 
 #include "neural/onnx/converter.h"
 
+#include <algorithm>
 #include <climits>
 #include <cmath>
 #include <cstddef>
@@ -431,30 +432,49 @@ std::string Converter::MakeEncoderLayer(
   }
   flow = builder->Add(name + "/mha/out/skip", flow, alpha_in);
 
+  auto ln1_gammas = layer.ln1_gammas;
+  auto ln1_betas = layer.ln1_betas;
+  auto ffn_dense1_b = layer.ffn.dense1_b;
+  auto ffn_dense2_w = layer.ffn.dense2_w;
+  auto ffn_dense2_b = layer.ffn.dense2_b;
+  const auto ffn_activation = static_cast<ActivationFunction>(
+      src_.format().network_format().ffn_activation());
+  if (ffn_activation == ACTIVATION_RELU_2 &&
+      GetDataType() == pblczero::TensorProto::FLOAT16) {
+    float scale = 0.25f;
+    std::transform(ln1_gammas.begin(), ln1_gammas.end(), ln1_gammas.begin(),
+                   [scale](float f) { return scale * f; });
+    std::transform(ln1_betas.begin(), ln1_betas.end(), ln1_betas.begin(),
+                   [scale](float f) { return scale * f; });
+    std::transform(ffn_dense1_b.begin(), ffn_dense1_b.end(),
+                   ffn_dense1_b.begin(),
+                   [scale](float f) { return scale * f; });
+    std::transform(ffn_dense2_w.begin(), ffn_dense2_w.end(),
+                   ffn_dense2_w.begin(),
+                   [scale](float f) { return f / scale; });
+    std::transform(ffn_dense2_b.begin(), ffn_dense2_b.end(),
+                   ffn_dense2_b.begin(),
+                   [scale](float f) { return scale * f; });
+  }
   auto ffn_in = builder->LayerNormalization(
-      name + "/ln1", flow,
-      *GetWeghtsConverter(layer.ln1_gammas, {embedding_size}),
-      *GetWeghtsConverter(layer.ln1_betas, {embedding_size}), 1);
+      name + "/ln1", flow, *GetWeghtsConverter(ln1_gammas, {embedding_size}),
+      *GetWeghtsConverter(ln1_betas, {embedding_size}), 1);
   const int dff_size = layer.ffn.dense1_b.size();
   flow =
       builder->MatMul(name + "/ffn/dense1/w", ffn_in,
                       *GetWeghtsConverter(layer.ffn.dense1_w,
                                           {embedding_size, dff_size}, {1, 0}));
   flow = builder->Add(name + "/ffn/dense1/b", flow,
-                      *GetWeghtsConverter(layer.ffn.dense1_b, {dff_size}));
+                      *GetWeghtsConverter(ffn_dense1_b, {dff_size}));
 
-  const auto ffn_activation = static_cast<ActivationFunction>(
-      src_.format().network_format().ffn_activation());
   flow = MakeActivation(
       builder, flow, name + "/ffn/dense1",
       ffn_activation == ACTIVATION_DEFAULT ? activation : ffn_activation);
-  flow =
-      builder->MatMul(name + "/ffn/dense2/w", flow,
-                      *GetWeghtsConverter(layer.ffn.dense2_w,
-                                          {dff_size, embedding_size}, {1, 0}));
-  flow =
-      builder->Add(name + "/ffn/dense2/b", flow,
-                   *GetWeghtsConverter(layer.ffn.dense2_b, {embedding_size}));
+  flow = builder->MatMul(
+      name + "/ffn/dense2/w", flow,
+      *GetWeghtsConverter(ffn_dense2_w, {dff_size, embedding_size}, {1, 0}));
+  flow = builder->Add(name + "/ffn/dense2/b", flow,
+                      *GetWeghtsConverter(ffn_dense2_b, {embedding_size}));
   std::string alpha_ffn_in;
   if (alpha != 1.0) {
     alpha_ffn_in = builder->Mul(name + "/alpha*out1", ffn_in, *alpha_onnx);
