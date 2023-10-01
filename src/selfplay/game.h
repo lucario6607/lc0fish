@@ -85,6 +85,9 @@ class SelfPlayGame {
   // not.
   void Abort();
 
+  // Number of ply used from the given opening.
+  int GetStartPly() const { return start_ply_; }
+
   // Writes training data to a file.
   void WriteTrainingData(TrainingDataWriter* writer) const;
 
@@ -107,6 +110,7 @@ class SelfPlayGame {
   std::shared_ptr<TranspositionTable> tt_[2];
 
   std::string orig_fen_;
+  int start_ply_;
 
   // Search that is currently in progress. Stored in members so that Abort()
   // can stop it.
