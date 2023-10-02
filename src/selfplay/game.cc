@@ -77,6 +77,9 @@ void SelfPlayGame::PopulateUciParams(OptionsParser* options) {
   PopulateTimeManagementOptions(RunType::kSelfplay, options);
   options->Add<StringOption>(kSyzygyTablebaseId);
   options->Add<FloatOption>(kOpeningStopProbId, 0.0f, 1.0f) = 0.0f;
+#ifdef FIX_TT
+  options->Add<IntOption>(kHashId, 0, 999999999) = 2000000;
+#endif
 }
 
 SelfPlayGame::SelfPlayGame(PlayerOptions white, PlayerOptions black,
@@ -91,7 +94,9 @@ SelfPlayGame::SelfPlayGame(PlayerOptions white, PlayerOptions black,
   tree_[0] = std::make_shared<NodeTree>();
   tree_[0]->ResetToPosition(orig_fen_, {});
   tt_[0] = std::make_shared<TranspositionTable>();
-
+#ifdef FIX_TT
+  tt_[0]->SetCapacity(options_[0].uci_options->Get<int>(kHashId));
+#endif
   if (shared_tree) {
     tree_[1] = tree_[0];
     tt_[1] = tt_[0];
@@ -99,6 +104,9 @@ SelfPlayGame::SelfPlayGame(PlayerOptions white, PlayerOptions black,
     tree_[1] = std::make_shared<NodeTree>();
     tree_[1]->ResetToPosition(orig_fen_, {});
     tt_[1] = std::make_shared<TranspositionTable>();
+#ifdef FIX_TT
+    tt_[1]->SetCapacity(options_[1].uci_options->Get<int>(kHashId));
+#endif
   }
   int ply = 0;
   auto white_prob = white.uci_options->Get<float>(kOpeningStopProbId);
@@ -165,7 +173,11 @@ void SelfPlayGame::Play(int white_threads, int black_threads, bool training,
     const int idx = blacks_move ? 1 : 0;
     if (!options_[idx].uci_options->Get<bool>(kReuseTreeId)) {
       tree_[idx]->TrimTreeAtHead();
+#ifndef FIX_TT
       tt_[idx]->clear();
+#else
+      tt_[idx]->Clear();
+#endif
     }
     {
       std::lock_guard<std::mutex> lock(mutex_);

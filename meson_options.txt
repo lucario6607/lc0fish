@@ -187,3 +187,8 @@ option('onnx_include',
        type: 'string',
        value: '',
        description: 'Paths to ONNX runtime includes')
+
+option('fixed_tt',
+       type: 'boolean',
+       value: false,
+       description: 'Build with fixed size transposition table.')

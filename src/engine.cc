@@ -99,6 +99,9 @@ void EngineController::PopulateOptions(OptionsParser* options) {
   NetworkFactory::PopulateOptions(options);
   options->Add<IntOption>(kThreadsOptionId, 1, 128) = kDefaultThreads;
   options->Add<IntOption>(kNNCacheSizeId, 0, 999999999) = 2000;
+#ifdef FIX_TT
+  options->Add<IntOption>(kHashId, 0, 999999999) = 2000000;
+#endif
   SearchParams::Populate(options);
 
   ConfigFile::PopulateOptions(options);
@@ -159,7 +162,9 @@ void EngineController::UpdateFromUciOptions() {
 
   // Cache size.
   cache_.SetCapacity(options_.Get<int>(kNNCacheSizeId));
-
+#ifdef FIX_TT
+  tt_.SetCapacity(options_.Get<int>(kHashId));
+#endif
   // Check whether we can update the move timer in "Go".
   strict_uci_timing_ = options_.Get<bool>(kStrictUciTiming);
 }
@@ -177,7 +182,11 @@ void EngineController::NewGame() {
   ResetMoveTimer();
   SharedLock lock(busy_mutex_);
   cache_.Clear();
+#ifndef FIX_TT
   tt_.clear();
+#else
+  tt_.Clear();
+#endif
   search_.reset();
   tree_.reset();
   CreateFreshTimeManager();

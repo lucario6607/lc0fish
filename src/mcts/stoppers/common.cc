@@ -33,6 +33,9 @@ const OptionId kNNCacheSizeId{
     "nncache", "NNCacheSize",
     "Number of positions to store in a memory cache. A large cache can speed "
     "up searching, but takes memory."};
+#ifdef FIX_TT
+const OptionId kHashId{"hash", "Hash", "Size of the transposition table."};
+#endif
 
 namespace {
 const OptionId kRamLimitMbId{
