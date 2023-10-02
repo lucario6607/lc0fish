@@ -27,8 +27,6 @@
 
 #pragma once
 
-#include <absl/container/flat_hash_map.h>
-
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -41,6 +39,10 @@
 #include "chess/position.h"
 #include "utils/cache.h"
 #include "utils/mutex.h"
+
+#ifndef FIX_TT
+#include <absl/container/flat_hash_map.h>
+#endif
 
 namespace lczero {
 
