@@ -209,7 +209,8 @@ class CudnnNetwork : public Network {
         // Some GPUs (GTX 16xx) are SM 7.5 but don't have tensor cores
         // enabling TENSOR_OP_MATH or nhwc_ layout for them works but is
         // very very slow (likely because the system emulates it).
-        if (!strstr(deviceProp.name, "GTX 16")) {
+        if (!strstr(deviceProp.name, "GTX 16") &&
+            !strstr(deviceProp.name, "T550")) {
           hasTensorCores = true;
           nhwc_ = true;
         }
