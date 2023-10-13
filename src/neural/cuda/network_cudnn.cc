@@ -209,9 +209,10 @@ class CudnnNetwork : public Network {
         // Some GPUs (GTX 16xx) are SM 7.5 but don't have tensor cores
         // enabling TENSOR_OP_MATH or nhwc_ layout for them works but is
         // very very slow (likely because the system emulates it).
-        // Check it is not in the TU116 and TU117 pci device id range.
-        if ((deviceProp.pciDeviceID & ~0x7f) != 0x1f80 &&
-            (deviceProp.pciDeviceID & ~0x7f) != 0x2180) {
+        // Also check it is not in the TU116 and TU117 pci device id range.
+        if (!strstr(deviceProp.name, "GTX 16") &&
+            (deviceProp.pciDeviceID & 0xff80) != 0x1f80 &&
+            (deviceProp.pciDeviceID & 0xff80) != 0x2180) {
           hasTensorCores = true;
           nhwc_ = true;
         }
@@ -1035,6 +1036,7 @@ class CudnnNetwork : public Network {
     CERR << "GPU clock frequency: " << deviceProp.clockRate / 1e3f << " MHz";
     CERR << "GPU compute capability: " << deviceProp.major << "."
          << deviceProp.minor;
+    CERR << "GPU PCI device id: " << std::hex << deviceProp.pciDeviceID;
 
     int version = (int)cudnnGetVersion();
     if (version < 7301 && (deviceProp.major > 7 ||

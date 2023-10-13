@@ -241,9 +241,10 @@ class CudaNetwork : public Network {
         // Some GPUs (GTX 16xx) are SM 7.5 but don't have tensor cores
         // enabling TENSOR_OP_MATH for them works but is very very slow
         // (likely because the system emulates it).
-        // Check it is not in the TU116 and TU117 pci device id range.
-        if ((deviceProp.pciDeviceID & ~0x7f) != 0x1f80 &&
-            (deviceProp.pciDeviceID & ~0x7f) != 0x2180) {
+        // Also check it is not in the TU116 and TU117 pci device id range.
+        if (!strstr(deviceProp.name, "GTX 16") &&
+            (deviceProp.pciDeviceID & 0xff80) != 0x1f80 &&
+            (deviceProp.pciDeviceID & 0xff80) != 0x2180) {
           has_tensor_cores_ = true;
         }
       } else {
