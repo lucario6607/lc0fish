@@ -89,6 +89,10 @@ const OptionId kNnueBestMoveId{
     "nnue-best-move", "",
     "For the SF training data record the best move instead of the played one. "
     "If set to true the generated files do not compress well."};
+const OptionId kNnueFrcFilterId{
+    "nnue-frc-filter", "",
+    "Do not generate SF training data for positions with castling that is not "
+    "valid for standard chess."};
 const OptionId kDeleteFilesId{"delete-files", "",
                               "Delete the input files after processing."};
 
@@ -437,6 +441,25 @@ int ResultForData(const V6TrainingData& data) {
   return static_cast<int>(data.result_q);
 }
 
+bool IsFRC(Position p) {
+  ChessBoard b = p.GetBoard();
+  ChessBoard::Castlings c = b.castlings();
+  if (c.no_legal_castle()) return false;
+  if ((c.we_can_00() || c.we_can_000()) &&
+      (b.kings() & b.ours()) != BoardSquare(ChessBoard::E1).as_board())
+    return true;
+  if ((c.they_can_00() || c.they_can_000()) &&
+      (b.kings() & b.theirs()) != BoardSquare(ChessBoard::E8).as_board())
+    return true;
+  if (c.queenside_rook() != ChessBoard::FILE_A &&
+      (c.we_can_000() || c.they_can_000()))
+    return true;
+  if (c.kingside_rook() != ChessBoard::FILE_H &&
+      (c.we_can_00() || c.they_can_00()))
+    return true;
+  return false;
+}
+
 std::string AsNnueString(const Position& p, Move m, float q, int result) {
   std::ostringstream out;
   out << "fen " << GetFen(p) << std::endl;
@@ -461,6 +484,7 @@ struct ProcessFileFlags {
   bool delete_files : 1;
   bool nnue_best_score : 1;
   bool nnue_best_move : 1;
+  bool nnue_frc_filter : 1;
 };
 
 void ProcessFile(const std::string& file, SyzygyTablebase* tablebase,
@@ -1073,16 +1097,18 @@ void ProcessFile(const std::string& file, SyzygyTablebase* tablebase,
         for (int i = 0; i < fileContents.size(); i++) {
           auto chunk = fileContents[i];
           Position p = history.Last();
-          if (chunk.visits > 0) {
-            // Format is v6 and position is evaluated.
-            Move m = MoveFromNNIndex(
-                flags.nnue_best_move ? chunk.best_idx : chunk.played_idx,
-                TransformForPosition(format, history));
-            float q = flags.nnue_best_score ? chunk.best_q : chunk.played_q;
-            out << AsNnueString(p, m, q, round(chunk.result_q));
-          } else if (i < moves.size()) {
-            out << AsNnueString(p, moves[i], chunk.best_q,
-                                round(chunk.result_q));
+          if (!flags.nnue_frc_filter || !IsFRC(p)) {
+            if (chunk.visits > 0) {
+              // Format is v6 and position is evaluated.
+              Move m = MoveFromNNIndex(
+                  flags.nnue_best_move ? chunk.best_idx : chunk.played_idx,
+                  TransformForPosition(format, history));
+              float q = flags.nnue_best_score ? chunk.best_q : chunk.played_q;
+              out << AsNnueString(p, m, q, round(chunk.result_q));
+            } else if (i < moves.size()) {
+              out << AsNnueString(p, moves[i], chunk.best_q,
+                                  round(chunk.result_q));
+            }
           }
           if (i < moves.size()) {
             history.Append(moves[i]);
@@ -1217,6 +1243,7 @@ void RescoreLoop::RunLoop() {
   options_.Add<StringOption>(kNnuePlainFileId);
   options_.Add<BoolOption>(kNnueBestScoreId) = true;
   options_.Add<BoolOption>(kNnueBestMoveId) = false;
+  options_.Add<BoolOption>(kNnueFrcFilterId) = true;
   options_.Add<BoolOption>(kDeleteFilesId) = true;
 
   SelfPlayTournament::PopulateOptions(&options_);
@@ -1290,6 +1317,7 @@ void RescoreLoop::RunLoop() {
   flags.delete_files = options_.GetOptionsDict().Get<bool>(kDeleteFilesId);
   flags.nnue_best_score = options_.GetOptionsDict().Get<bool>(kNnueBestScoreId);
   flags.nnue_best_move = options_.GetOptionsDict().Get<bool>(kNnueBestMoveId);
+  flags.nnue_frc_filter = options_.GetOptionsDict().Get<bool>(kNnueFrcFilterId);
   if (threads > 1) {
     std::vector<std::thread> threads_;
     int offset = 0;
