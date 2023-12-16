@@ -460,9 +460,23 @@ bool IsFRC(Position p) {
   return false;
 }
 
-std::string AsNnueString(const Position& p, Move m, float q, int result) {
+std::string AsNnueString(const Position& p, Move m, float q, int result,
+                         bool fix_frc) {
   std::ostringstream out;
-  out << "fen " << GetFen(p) << std::endl;
+  auto fen = GetFen(p);
+  if (fix_frc && !p.GetBoard().castlings().no_legal_castle()) {
+    auto pos = fen.find_first_of("aAhH");
+    if (pos != std::string::npos) {
+      // Castling rights will only be a, A, h, H, aA or hH;
+      for (auto i = 0; i < 2; i++) {
+        if (fen[pos + i] == 'a') fen[pos + i] = 'q';
+        if (fen[pos + i] == 'A') fen[pos + i] = 'Q';
+        if (fen[pos + i] == 'h') fen[pos + i] = 'k';
+        if (fen[pos + i] == 'H') fen[pos + i] = 'K';
+      }
+    }
+  }
+  out << "fen " << fen << std::endl;
   m = p.GetBoard().GetLegacyMove(m);
   if (m.from().row() == ChessBoard::Rank::RANK_7 &&
       p.GetBoard().pawns().get(m.from()) &&
@@ -1104,10 +1118,11 @@ void ProcessFile(const std::string& file, SyzygyTablebase* tablebase,
                   flags.nnue_best_move ? chunk.best_idx : chunk.played_idx,
                   TransformForPosition(format, history));
               float q = flags.nnue_best_score ? chunk.best_q : chunk.played_q;
-              out << AsNnueString(p, m, q, round(chunk.result_q));
+              out << AsNnueString(p, m, q, round(chunk.result_q),
+                                  flags.nnue_frc_filter);
             } else if (i < moves.size()) {
               out << AsNnueString(p, moves[i], chunk.best_q,
-                                  round(chunk.result_q));
+                                  round(chunk.result_q), flags.nnue_frc_filter);
             }
           }
           if (i < moves.size()) {
