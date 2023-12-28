@@ -469,6 +469,8 @@ std::string AsNnueString(const Position& p, Move m, float q, int result,
     if (pos != std::string::npos) {
       // Castling rights will only be a, A, h, H, aA or hH;
       for (auto i = 0; i < 2; i++) {
+        // Check if en-passant field, it comes later so we can exit.
+        if (isdigit(fen[pos + i + 1])) break;
         if (fen[pos + i] == 'a') fen[pos + i] = 'q';
         if (fen[pos + i] == 'A') fen[pos + i] = 'Q';
         if (fen[pos + i] == 'h') fen[pos + i] = 'k';
@@ -486,7 +488,7 @@ std::string AsNnueString(const Position& p, Move m, float q, int result,
   if (p.IsBlackToMove()) m.Mirror();
   out << "move " << m.as_string() << std::endl;
   // Formula from PR1477 adjuster for SF PawnValueEg.
-  out << "score " << round(660.6 * q / (1 - 0.9751875 * std::pow(q, 10)))
+  out << "score " << (int)round(660.6 * q / (1 - 0.9751875 * std::pow(q, 10)))
       << std::endl;
   out << "ply " << p.GetGamePly() << std::endl;
   out << "result " << result << std::endl;
