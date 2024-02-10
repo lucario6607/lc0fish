@@ -61,9 +61,9 @@ class BlasNetwork;
 template <bool use_eigen>
 class BlasComputation : public NetworkComputation {
  public:
-  BlasComputation(BlasNetwork<use_eigen>* network, const LegacyWeights& weights,
-                  const size_t max_batch_size, const bool wdl,
-                  const bool moves_left, const bool conv_policy,
+  BlasComputation(BlasNetwork<use_eigen>* network,
+                  const MultiHeadWeights& weights, const size_t max_batch_size,
+                  const bool wdl, const bool moves_left, const bool conv_policy,
                   const ActivationFunction default_activation,
                   const ActivationFunction smolgen_activation,
                   const ActivationFunction ffn_activation,
@@ -119,7 +119,7 @@ class BlasComputation : public NetworkComputation {
                         std::vector<float>& head_buffer2,
                         std::vector<float>& head_buffer3,
                         std::vector<float>& head_buffer4, size_t batch_size,
-                        const LegacyWeights::EncoderLayer& layer,
+                        const MultiHeadWeights::EncoderLayer& layer,
                         int embedding_size, int heads,
                         ActivationFunction smolgen_activation,
                         ActivationFunction ffn_activation, float alpha);
@@ -132,7 +132,7 @@ class BlasComputation : public NetworkComputation {
   // The real number of planes is higher because of padding.
   static constexpr auto kPolicyUsedPlanes = 73;
 
-  const LegacyWeights& weights_;
+  const MultiHeadWeights& weights_;
   size_t max_batch_size_;
   std::vector<InputPlanes> planes_;
   std::vector<std::vector<float>> policies_;
@@ -194,7 +194,7 @@ class BlasNetwork : public Network {
   static constexpr auto kHardMaxBatchSize = 2048;
 
   const NetworkCapabilities capabilities_;
-  LegacyWeights weights_;
+  MultiHeadWeights weights_;
   size_t max_batch_size_;
   bool wdl_;
   bool moves_left_;
@@ -210,7 +210,7 @@ class BlasNetwork : public Network {
 
 template <bool use_eigen>
 BlasComputation<use_eigen>::BlasComputation(
-    BlasNetwork<use_eigen>* network, const LegacyWeights& weights,
+    BlasNetwork<use_eigen>* network, const MultiHeadWeights& weights,
     const size_t max_batch_size, const bool wdl, const bool moves_left,
     const bool conv_policy, const ActivationFunction default_activation,
     const ActivationFunction smolgen_activation,
@@ -260,7 +260,7 @@ template <bool use_eigen>
 void BlasComputation<use_eigen>::MakeEncoderLayer(
     std::vector<float>& head_buffer, std::vector<float>& head_buffer2,
     std::vector<float>& head_buffer3, std::vector<float>& head_buffer4,
-    size_t batch_size, const LegacyWeights::EncoderLayer& layer,
+    size_t batch_size, const MultiHeadWeights::EncoderLayer& layer,
     int embedding_size, int heads, ActivationFunction smolgen_activation,
     ActivationFunction ffn_activation, float alpha) {
   const int d_model = layer.mha.q_b.size();
@@ -457,8 +457,9 @@ void BlasComputation<use_eigen>::MakeEncoderLayer(
 
 template <bool use_eigen>
 void BlasComputation<use_eigen>::ComputeBlocking() {
-  const LegacyWeights::ValueHead& value_head = weights_.value_heads.winner;
-  const LegacyWeights::PolicyHead& policy_head = weights_.policy_heads.vanilla;
+  const MultiHeadWeights::ValueHead& value_head = weights_.value_heads.winner;
+  const MultiHeadWeights::PolicyHead& policy_head =
+      weights_.policy_heads.vanilla;
   // Retrieve network key dimensions from the weights structure.
   const auto num_value_channels = value_head.ip1_val_b.size();
   const auto num_moves_channels = weights_.ip1_mov_b.size();
@@ -865,8 +866,8 @@ void BlasComputation<use_eigen>::ComputeBlocking() {
 
       FullyConnectedLayer<use_eigen>::Forward1D(
           batch_size, num_policy_input_planes * kSquares, num_output_policy,
-          head_buffer.data(), policy_head.ip_pol_w.data(),
-          policy_head.ip_pol_b.data(),
+          head_buffer.data(), weights_.policy_heads.ip_pol_w.data(),
+          weights_.policy_heads.ip_pol_b.data(),
           ACTIVATION_NONE,  // Activation Off
           buffer3.data());
 
@@ -918,7 +919,7 @@ BlasNetwork<use_eigen>::BlasNetwork(const WeightsFile& file,
                  pblczero::NetworkFormat::POLICY_ATTENTION;
 
   attn_body_ =
-      file.format().network_format().network() ==
+      (file.format().network_format().network() | 128) ==
       pblczero::NetworkFormat::NETWORK_ATTENTIONBODY_WITH_MULTIHEADFORMAT;
 
   default_activation_ = file.format().network_format().default_activation() ==
@@ -960,7 +961,7 @@ BlasNetwork<use_eigen>::BlasNetwork(const WeightsFile& file,
   }
 
   if (conv_policy_) {
-    LegacyWeights::PolicyHead& policy_head = weights_.policy_heads.vanilla;
+    MultiHeadWeights::PolicyHead& policy_head = weights_.policy_heads.vanilla;
     policy_head.policy1.weights = WinogradFilterTransformF(
         policy_head.policy1.weights, channels, channels);
     auto pol_channels = policy_head.policy.biases.size();
@@ -1017,11 +1018,11 @@ std::unique_ptr<Network> MakeBlasNetwork(const std::optional<WeightsFile>& w,
                     " backend requires a network file.");
   }
   const WeightsFile& weights = *w;
-  if (weights.format().network_format().network() !=
+  auto format = weights.format().network_format().network() | 128;
+  if (format !=
           pblczero::NetworkFormat::NETWORK_CLASSICAL_WITH_MULTIHEADFORMAT &&
-      weights.format().network_format().network() !=
-          pblczero::NetworkFormat::NETWORK_SE_WITH_MULTIHEADFORMAT &&
-      weights.format().network_format().network() !=
+      format != pblczero::NetworkFormat::NETWORK_SE_WITH_MULTIHEADFORMAT &&
+      format !=
           pblczero::NetworkFormat::NETWORK_ATTENTIONBODY_WITH_MULTIHEADFORMAT) {
     throw Exception("Network format " +
                     pblczero::NetworkFormat::NetworkStructure_Name(

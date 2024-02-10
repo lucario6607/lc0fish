@@ -79,23 +79,23 @@ class Converter {
                      std::initializer_list<int> dims);
 
   std::string MakeConvBlock(OnnxBuilder* builder,
-                            const LegacyWeights::ConvBlock&, int input_channels,
-                            int output_channels, const std::string& input,
-                            const std::string& name,
-                            const LegacyWeights::SEunit* se_unit = nullptr,
+                            const MultiHeadWeights::ConvBlock&,
+                            int input_channels, int output_channels,
+                            const std::string& input, const std::string& name,
+                            const MultiHeadWeights::SEunit* se_unit = nullptr,
                             const std::string& mixin = "",
                             bool activation = true, int filters = 3);
 
   std::string MakeResidualBlock(OnnxBuilder* builder,
-                                const LegacyWeights::Residual&,
+                                const MultiHeadWeights::Residual&,
                                 const std::string& input,
                                 const std::string& name);
 
   std::string MakeAttentionBody(OnnxBuilder* builder, const std::string& input,
-                                const LegacyWeights& weights);
+                                const MultiHeadWeights& weights);
 
   std::string MakeSqueezeAndExcite(OnnxBuilder* builder,
-                                   const LegacyWeights::SEunit& se_unit,
+                                   const MultiHeadWeights::SEunit& se_unit,
                                    const std::string& input,
                                    const std::string& name);
 
@@ -110,7 +110,7 @@ class Converter {
                              ActivationFunction activation);
 
   std::string MakeSmolgen(OnnxBuilder* builder,
-                          const LegacyWeights::EncoderLayer& layer,
+                          const MultiHeadWeights::EncoderLayer& layer,
                           int embedding_size, int heads,
                           const std::string& encoder_in,
                           const std::string& name);
@@ -121,7 +121,7 @@ class Converter {
                             const lczero::OnnxConst& betas, float eps = 1e-6);
 
   std::string MakeEncoderLayer(OnnxBuilder* builder,
-                               const LegacyWeights::EncoderLayer& layer,
+                               const MultiHeadWeights::EncoderLayer& layer,
                                int embedding_size, int heads,
                                const std::string& encoder_in,
                                const std::string& name,
@@ -130,18 +130,19 @@ class Converter {
 
   std::string MakeAttentionPolicy(OnnxBuilder* builder,
                                   const std::string& input,
-                                  const LegacyWeights& weights,
-                                  const LegacyWeights::PolicyHead& head);
+                                  const MultiHeadWeights& weights,
+                                  const MultiHeadWeights::PolicyHead& head);
 
   void MakePolicyHead(pblczero::OnnxModel* onnx, OnnxBuilder* builder,
-                      const std::string& input, const LegacyWeights& weights);
+                      const std::string& input,
+                      const MultiHeadWeights& weights);
 
   void MakeValueHead(pblczero::OnnxModel* onnx, OnnxBuilder* builder,
-                     const std::string& input, const LegacyWeights& weights);
+                     const std::string& input, const MultiHeadWeights& weights);
 
   void MakeMovesLeftHead(pblczero::OnnxModel* onnx, OnnxBuilder* builder,
                          const std::string& input,
-                         const LegacyWeights& weights);
+                         const MultiHeadWeights& weights);
 
   void AddStdInitializers(OnnxBuilder* builder);
 
@@ -240,7 +241,7 @@ std::string Converter::MakeActivation(OnnxBuilder* builder,
 }
 
 std::string Converter::MakeSqueezeAndExcite(
-    OnnxBuilder* builder, const LegacyWeights::SEunit& se_unit,
+    OnnxBuilder* builder, const MultiHeadWeights::SEunit& se_unit,
     const std::string& input, const std::string& name) {
   const int se_filters = se_unit.b1.size();
 
@@ -272,9 +273,9 @@ std::string Converter::MakeSqueezeAndExcite(
 }
 
 std::string Converter::MakeConvBlock(
-    OnnxBuilder* builder, const LegacyWeights::ConvBlock& weights,
+    OnnxBuilder* builder, const MultiHeadWeights::ConvBlock& weights,
     int input_channels, int output_channels, const std::string& input,
-    const std::string& name, const LegacyWeights::SEunit* seunit,
+    const std::string& name, const MultiHeadWeights::SEunit* seunit,
     const std::string& mixin, bool activation, int filters) {
   auto flow = builder->Conv(
       name, input,
@@ -292,7 +293,7 @@ std::string Converter::MakeConvBlock(
 }
 
 std::string Converter::MakeResidualBlock(OnnxBuilder* builder,
-                                         const LegacyWeights::Residual& res,
+                                         const MultiHeadWeights::Residual& res,
                                          const std::string& input,
                                          const std::string& name) {
   auto block1 = MakeConvBlock(builder, res.conv1, NumFilters(), NumFilters(),
@@ -302,7 +303,7 @@ std::string Converter::MakeResidualBlock(OnnxBuilder* builder,
 }
 
 std::string Converter::MakeSmolgen(OnnxBuilder* builder,
-                                   const LegacyWeights::EncoderLayer& layer,
+                                   const MultiHeadWeights::EncoderLayer& layer,
                                    int embedding_size, int heads,
                                    const std::string& encoder_in,
                                    const std::string& name) {
@@ -394,7 +395,7 @@ std::string Converter::MakeLayerNorm(OnnxBuilder* builder,
 }
 
 std::string Converter::MakeEncoderLayer(
-    OnnxBuilder* builder, const LegacyWeights::EncoderLayer& layer,
+    OnnxBuilder* builder, const MultiHeadWeights::EncoderLayer& layer,
     int embedding_size, int heads, const std::string& encoder_in,
     const std::string& name, ActivationFunction activation, float alpha) {
   const int d_model = layer.mha.q_b.size();
@@ -509,7 +510,7 @@ std::string Converter::MakeEncoderLayer(
 
 std::string Converter::MakeAttentionBody(OnnxBuilder* builder,
                                          const std::string& input,
-                                         const LegacyWeights& weights) {
+                                         const MultiHeadWeights& weights) {
   if (weights.has_smolgen) {
     builder->AddInitializer(
         "/const/smolgen_w",
@@ -734,7 +735,7 @@ std::vector<int> MakePolicyMap(const short* map, int size) {
 
 std::string Converter::MakeAttentionPolicy(
     OnnxBuilder* builder, const std::string& input,
-    const LegacyWeights& weights, const LegacyWeights::PolicyHead& head) {
+    const MultiHeadWeights& weights, const MultiHeadWeights::PolicyHead& head) {
   if (head.ip2_pol_b.empty()) {
     throw Exception("The policy head selected '" + options_.policy_head + "'" +
                     " is empty.");
@@ -743,7 +744,7 @@ std::string Converter::MakeAttentionPolicy(
   const int policy_embedding_size = weights.policy_heads.ip_pol_b.size();
   const int policy_d_model = head.ip2_pol_b.size();
   auto flow = input;
-  auto activation = src_.format().network_format().network() >=
+  auto activation = (src_.format().network_format().network() | 127) >=
                             pblczero::NetworkFormat::
                                 NETWORK_ATTENTIONBODY_WITH_MULTIHEADFORMAT
                         ? default_activation_
@@ -849,8 +850,8 @@ std::string Converter::MakeAttentionPolicy(
 
 void Converter::MakePolicyHead(pblczero::OnnxModel* onnx, OnnxBuilder* builder,
                                const std::string& input,
-                               const LegacyWeights& weights) {
-  const LegacyWeights::PolicyHead& head =
+                               const MultiHeadWeights& weights) {
+  const MultiHeadWeights::PolicyHead& head =
       (options_.policy_head == "vanilla")
           ? weights.policy_heads.vanilla
           : (options_.policy_head == "optimistic")
@@ -904,10 +905,11 @@ void Converter::MakePolicyHead(pblczero::OnnxModel* onnx, OnnxBuilder* builder,
                              Int64OnnxConst({-1, pol_channels * 8 * 8}, {2})));
     flow = builder->MatMul(
         "/policy/dense/matmul", flow,
-        *GetWeghtsConverter(head.ip_pol_w, {pol_channels * 8 * 8, 1858},
-                            {1, 0}));
-    auto output = builder->Add(options_.output_policy_head, flow,
-                               *GetWeghtsConverter(head.ip_pol_b, {1858}));
+        *GetWeghtsConverter(weights.policy_heads.ip_pol_w,
+                            {pol_channels * 8 * 8, 1858}, {1, 0}));
+    auto output = builder->Add(
+        options_.output_policy_head, flow,
+        *GetWeghtsConverter(weights.policy_heads.ip_pol_b, {1858}));
     builder->AddOutput(output, {options_.batch_size, 1858}, GetDataType());
     onnx->set_output_policy(output);
   }
@@ -915,12 +917,12 @@ void Converter::MakePolicyHead(pblczero::OnnxModel* onnx, OnnxBuilder* builder,
 
 void Converter::MakeValueHead(pblczero::OnnxModel* onnx, OnnxBuilder* builder,
                               const std::string& input,
-                              const LegacyWeights& weights) {
-  const LegacyWeights::ValueHead& head = (options_.value_head == "winner")
-                                             ? weights.value_heads.winner
-                                             : (options_.value_head == "q")
-                                                   ? weights.value_heads.q
-                                                   : weights.value_heads.st;
+                              const MultiHeadWeights& weights) {
+  const MultiHeadWeights::ValueHead& head = (options_.value_head == "winner")
+                                                ? weights.value_heads.winner
+                                                : (options_.value_head == "q")
+                                                      ? weights.value_heads.q
+                                                      : weights.value_heads.st;
   if (head.ip1_val_b.empty()) {
     throw Exception("The value head selected '" + options_.value_head + "'" +
                     " is empty.");
@@ -977,7 +979,7 @@ void Converter::MakeValueHead(pblczero::OnnxModel* onnx, OnnxBuilder* builder,
 void Converter::MakeMovesLeftHead(pblczero::OnnxModel* onnx,
                                   OnnxBuilder* builder,
                                   const std::string& input,
-                                  const LegacyWeights& weights) {
+                                  const MultiHeadWeights& weights) {
   if (src_.format().network_format().moves_left() !=
       pblczero::NetworkFormat::MOVES_LEFT_V1) {
     return;
@@ -1025,7 +1027,7 @@ void Converter::MakeMovesLeftHead(pblczero::OnnxModel* onnx,
 }
 
 void Converter::GenerateOnnx(pblczero::OnnxModel* onnx) {
-  LegacyWeights weights(src_.weights());
+  MultiHeadWeights weights(src_.weights());
   OnnxBuilder builder(options_.opset);
 
   onnx->set_data_type(GetDataType() == pblczero::TensorProto::FLOAT16
@@ -1082,7 +1084,7 @@ void Converter::CopyGenericFields(pblczero::Net* dst) {
 }
 
 void CheckSrcFormat(const pblczero::NetworkFormat& nf) {
-  switch (nf.network()) {
+  switch (nf.network() | 128) {
     case pblczero::NetworkFormat::NETWORK_CLASSICAL_WITH_MULTIHEADFORMAT:
     case pblczero::NetworkFormat::NETWORK_SE_WITH_MULTIHEADFORMAT:
     case pblczero::NetworkFormat::NETWORK_ATTENTIONBODY_WITH_MULTIHEADFORMAT:
