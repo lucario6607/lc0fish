@@ -744,9 +744,9 @@ std::string Converter::MakeAttentionPolicy(
   const int policy_embedding_size = weights.policy_heads.ip_pol_b.size();
   const int policy_d_model = head.ip2_pol_b.size();
   auto flow = input;
-  auto activation = (src_.format().network_format().network() | 127) >=
+  auto activation = src_.format().network_format().network() >=
                             pblczero::NetworkFormat::
-                                NETWORK_ATTENTIONBODY_WITH_MULTIHEADFORMAT
+                                NETWORK_ATTENTIONBODY_WITH_HEADFORMAT
                         ? default_activation_
                         : ACTIVATION_SELU;
   if (NumEncBlocks() == 0) {
@@ -1084,9 +1084,10 @@ void Converter::CopyGenericFields(pblczero::Net* dst) {
 }
 
 void CheckSrcFormat(const pblczero::NetworkFormat& nf) {
-  switch (nf.network() | 128) {
-    case pblczero::NetworkFormat::NETWORK_CLASSICAL_WITH_MULTIHEADFORMAT:
-    case pblczero::NetworkFormat::NETWORK_SE_WITH_MULTIHEADFORMAT:
+  switch (nf.network()) {
+    case pblczero::NetworkFormat::NETWORK_CLASSICAL_WITH_HEADFORMAT:
+    case pblczero::NetworkFormat::NETWORK_SE_WITH_HEADFORMAT:
+    case pblczero::NetworkFormat::NETWORK_ATTENTIONBODY_WITH_HEADFORMAT:
     case pblczero::NetworkFormat::NETWORK_ATTENTIONBODY_WITH_MULTIHEADFORMAT:
       break;
     default:
