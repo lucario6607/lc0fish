@@ -508,7 +508,7 @@ void BlasComputation<use_eigen>::ComputeBlocking() {
                std::max(num_value_input_planes, num_moves_input_planes));
   if (attn_policy_) {
     max_head_planes = std::max(std::max(max_head_planes, size_t{67}),
-                               weights_.policy_heads.ip_pol_b.size());
+                               policy_head.ip_pol_b.size());
   }
 
   std::unique_ptr<Buffers> buffers = network_->GetBuffers();
@@ -729,13 +729,12 @@ void BlasComputation<use_eigen>::ComputeBlocking() {
           }
         }
       }
-      const size_t policy_embedding_size =
-          weights_.policy_heads.ip_pol_b.size();
+      const size_t policy_embedding_size = policy_head.ip_pol_b.size();
       // Policy Embedding.
       FullyConnectedLayer<use_eigen>::Forward1D(
           batch_size * kSquares, output_channels, policy_embedding_size,
-          buffer1.data(), weights_.policy_heads.ip_pol_w.data(),
-          weights_.policy_heads.ip_pol_b.data(),
+          buffer1.data(), policy_head.ip_pol_w.data(),
+          policy_head.ip_pol_b.data(),
           attn_body_
               ? default_activation_
               : ACTIVATION_SELU,  // SELU activation hardcoded for apmish nets.
@@ -866,8 +865,8 @@ void BlasComputation<use_eigen>::ComputeBlocking() {
 
       FullyConnectedLayer<use_eigen>::Forward1D(
           batch_size, num_policy_input_planes * kSquares, num_output_policy,
-          head_buffer.data(), weights_.policy_heads.ip_pol_w.data(),
-          weights_.policy_heads.ip_pol_b.data(),
+          head_buffer.data(), policy_head.ip_pol_w.data(),
+          policy_head.ip_pol_b.data(),
           ACTIVATION_NONE,  // Activation Off
           buffer3.data());
 

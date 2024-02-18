@@ -741,7 +741,7 @@ std::string Converter::MakeAttentionPolicy(
                     " is empty.");
   }
   const int embedding_size = weights.ip_emb_b.size();
-  const int policy_embedding_size = weights.policy_heads.ip_pol_b.size();
+  const int policy_embedding_size = head.ip_pol_b.size();
   const int policy_d_model = head.ip2_pol_b.size();
   auto flow = input;
   auto activation = src_.format().network_format().network() >=
@@ -759,12 +759,12 @@ std::string Converter::MakeAttentionPolicy(
   }
   flow = builder->MatMul(
       "/policy/dense1/matmul", flow,
-      *GetWeghtsConverter(weights.policy_heads.ip_pol_w,
+      *GetWeghtsConverter(head.ip_pol_w,
                           {NumEncBlocks() > 0 ? embedding_size : NumFilters(),
                            policy_embedding_size},
                           {1, 0}));
   flow = builder->Add("/policy/dense1/add", flow,
-                      *GetWeghtsConverter(weights.policy_heads.ip_pol_b,
+                      *GetWeghtsConverter(head.ip_pol_b,
                                           {policy_embedding_size}));
   flow = MakeActivation(builder, flow, "/policy/dense1", activation);
 
@@ -905,11 +905,11 @@ void Converter::MakePolicyHead(pblczero::OnnxModel* onnx, OnnxBuilder* builder,
                              Int64OnnxConst({-1, pol_channels * 8 * 8}, {2})));
     flow = builder->MatMul(
         "/policy/dense/matmul", flow,
-        *GetWeghtsConverter(weights.policy_heads.ip_pol_w,
+        *GetWeghtsConverter(head.ip_pol_w,
                             {pol_channels * 8 * 8, 1858}, {1, 0}));
     auto output = builder->Add(
         options_.output_policy_head, flow,
-        *GetWeghtsConverter(weights.policy_heads.ip_pol_b, {1858}));
+        *GetWeghtsConverter(head.ip_pol_b, {1858}));
     builder->AddOutput(output, {options_.batch_size, 1858}, GetDataType());
     onnx->set_output_policy(output);
   }
