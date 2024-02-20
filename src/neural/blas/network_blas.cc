@@ -457,9 +457,8 @@ void BlasComputation<use_eigen>::MakeEncoderLayer(
 
 template <bool use_eigen>
 void BlasComputation<use_eigen>::ComputeBlocking() {
-  const MultiHeadWeights::ValueHead& value_head = weights_.value_heads.winner;
-  const MultiHeadWeights::PolicyHead& policy_head =
-      weights_.policy_heads.vanilla;
+  const auto& value_head = weights_.value_heads.winner;
+  const auto& policy_head = weights_.policy_heads.vanilla;
   // Retrieve network key dimensions from the weights structure.
   const auto num_value_channels = value_head.ip1_val_b.size();
   const auto num_moves_channels = weights_.ip1_mov_b.size();
@@ -918,8 +917,8 @@ BlasNetwork<use_eigen>::BlasNetwork(const WeightsFile& file,
                  pblczero::NetworkFormat::POLICY_ATTENTION;
 
   attn_body_ =
-      (file.format().network_format().network() | 128) ==
-      pblczero::NetworkFormat::NETWORK_ATTENTIONBODY_WITH_MULTIHEADFORMAT;
+      file.format().network_format().network() ==
+      pblczero::NetworkFormat::NETWORK_ATTENTIONBODY_WITH_HEADFORMAT;
 
   default_activation_ = file.format().network_format().default_activation() ==
                                 pblczero::NetworkFormat::DEFAULT_ACTIVATION_MISH
@@ -960,7 +959,7 @@ BlasNetwork<use_eigen>::BlasNetwork(const WeightsFile& file,
   }
 
   if (conv_policy_) {
-    MultiHeadWeights::PolicyHead& policy_head = weights_.policy_heads.vanilla;
+    auto& policy_head = weights_.policy_heads.vanilla;
     policy_head.policy1.weights = WinogradFilterTransformF(
         policy_head.policy1.weights, channels, channels);
     auto pol_channels = policy_head.policy.biases.size();
@@ -1017,12 +1016,12 @@ std::unique_ptr<Network> MakeBlasNetwork(const std::optional<WeightsFile>& w,
                     " backend requires a network file.");
   }
   const WeightsFile& weights = *w;
-  auto format = weights.format().network_format().network() | 128;
-  if (format !=
-          pblczero::NetworkFormat::NETWORK_CLASSICAL_WITH_MULTIHEADFORMAT &&
-      format != pblczero::NetworkFormat::NETWORK_SE_WITH_MULTIHEADFORMAT &&
-      format !=
-          pblczero::NetworkFormat::NETWORK_ATTENTIONBODY_WITH_MULTIHEADFORMAT) {
+  if (weights.format().network_format().network() !=
+          pblczero::NetworkFormat::NETWORK_CLASSICAL_WITH_HEADFORMAT &&
+      weights.format().network_format().network() !=
+          pblczero::NetworkFormat::NETWORK_SE_WITH_HEADFORMAT &&
+      weights.format().network_format().network() !=
+          pblczero::NetworkFormat::NETWORK_ATTENTIONBODY_WITH_HEADFORMAT) {
     throw Exception("Network format " +
                     pblczero::NetworkFormat::NetworkStructure_Name(
                         weights.format().network_format().network()) +
