@@ -238,6 +238,9 @@ MultiHeadWeights::MultiHeadWeights(const pblczero::Weights& weights)
                        std::forward_as_tuple(weights.policy_heads().vanilla(),
                                              ip_pol_w, ip_pol_b));
   if (weights.has_policy_heads()) {
+    if (weights.policy_heads().policy_head_map_size() > 0) {
+      throw Exception("Network contains unsupported policy heads.");
+    }
     if (weights.policy_heads().has_optimistic_st()) {
       policy_heads.emplace(
           std::piecewise_construct, std::forward_as_tuple("optimistic_st"),
@@ -278,6 +281,9 @@ MultiHeadWeights::MultiHeadWeights(const pblczero::Weights& weights)
 
   value_heads.emplace("winner", weights.value_heads().winner());
   if (weights.has_value_heads()) {
+    if (weights.value_heads().value_head_map_size() > 0) {
+      throw Exception("Network contains unsupported value heads.");
+    }
     if (weights.value_heads().has_q()) {
       value_heads.emplace("q", weights.value_heads().q());
     }
