@@ -1308,7 +1308,24 @@ class Onnx2HloConverter {
   std::vector<HloFlow> OpMish(const pblczero::NodeProto& node) {
     CheckKnownAttributes(node, 1, {});
     auto* input = GetInput(node, 0);
-    return {builder_.Tanh(builder_.LogPlusOne(builder_.Exponential(input)))};
+    constexpr auto kType = pblczero::XlaShapeProto::F32;
+    const auto input_type = input->shape().element_type();
+    const bool need_conv = input_type != kType;
+    input = need_conv ? builder_.Convert(input, kType) : input;
+    auto* e = builder_.Exponential(input);
+    auto* two = DoBroadcast(MakeScalar(2, kType), input->shape().dimensions());
+    auto* flow = builder_.Add(e, two);
+    auto* n = builder_.Multiply(e, flow);
+    flow = builder_.Add(n, two);
+    flow = builder_.Divide(input, flow);
+    auto* rhs = builder_.Multiply(n, flow);
+    flow = builder_.Add(flow, flow);
+    auto* lhs = builder_.Subtract(input, flow);
+    auto* zero = DoBroadcast(MakeScalar(0, kType), input->shape().dimensions());
+    auto* pred = builder_.Compare(input, zero, "GT");
+    flow = builder_.Select(pred, lhs, rhs);
+    if (need_conv) flow = builder_.Convert(flow, input_type);
+    return {flow};
   }
 
   /////////////////////////////////////////////////////////////////////////////
