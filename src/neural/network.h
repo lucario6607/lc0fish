@@ -65,7 +65,7 @@ class NetworkComputation {
   virtual float GetQVal(int sample) const = 0;
   virtual float GetDVal(int sample) const = 0;
   // Returns E (value error) value for @sample.
-  virtual float GetEVal(int sample) const = 0;
+  virtual float GetEVal(int /*sample*/) const { return 0; }
   // Returns P value @move_id of @sample.
   virtual float GetPVal(int sample, int move_id) const = 0;
   virtual float GetMVal(int sample) const = 0;
@@ -108,7 +108,10 @@ class Network {
  public:
   virtual const NetworkCapabilities& GetCapabilities() const = 0;
   virtual std::unique_ptr<NetworkComputation> NewComputation() = 0;
+  virtual int GetThreads() const { return 1; }
   virtual void InitThread(int /*id*/) {}
+  virtual bool IsCpu() const { return false; }
+  virtual int GetMiniBatchSize() const { return 256; }
   virtual ~Network() = default;
 };
 
