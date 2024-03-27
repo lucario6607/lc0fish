@@ -336,11 +336,11 @@ class ResidualBlock : public BaseLayer<DataType> {
 template <typename DataType>
 class EncoderBlock {
  public:
-  EncoderBlock(const LegacyWeights::EncoderLayer& cpu_weights, void* scratch,
+  EncoderBlock(const MultiHeadWeights::EncoderLayer& cpu_weights, void* scratch,
                int heads, int size, float alpha,
                DataType* smolgen_global_scratch, int smolgen_global_size,
                int max_batch_size, ActivationFunction smolgen_act,
-               ActivationFunction ffn_act, bool fused_mha);
+               ActivationFunction ffn_act, float default_eps);
   ~EncoderBlock();
 
   void Eval(int N, DataType* inpop, DataType* scratch0, DataType* scratch1,
@@ -380,9 +380,9 @@ class EncoderBlock {
   int encoder_heads_;
 
   float alpha_;  // scale to apply to skip connection add
+  float default_eps_;  // value of epsilon where it wasn't specified in training
 
   const bool has_smolgen_;
-  const bool use_fused_mha_;
   const ActivationFunction smolgen_activation_;
   const ActivationFunction ffn_activation_;
 
@@ -408,9 +408,10 @@ class AttentionPolicyHead : public BaseLayer<DataType> {
   using BaseLayer<DataType>::GetW;
 
  public:
-  AttentionPolicyHead(BaseLayer<DataType>* ip, const LegacyWeights& weights,
+  AttentionPolicyHead(BaseLayer<DataType>* ip,
+                      const MultiHeadWeights::PolicyHead& weights,
                       void* scratch, bool attention_body,
-                      ActivationFunction act, std::string policy_head, int max_batch_size);
+                      ActivationFunction act, int max_batch_size);
   ~AttentionPolicyHead();
   void Eval(int N, DataType* output, const DataType* input,
             const DataType* input2, void* scratch, size_t scratch_size,
@@ -473,9 +474,9 @@ class AttentionBody : public BaseLayer<DataType> {
   using BaseLayer<DataType>::GetW;
 
  public:
-  AttentionBody(const LegacyWeights& weights, void* scratch,
+  AttentionBody(const MultiHeadWeights& weights, void* scratch,
                 Activations activations, int num_res_blocks, int input_c,
-                int max_batch_size, bool new_encoding, bool fused_mha);
+                int max_batch_size, bool is_pe_dense_embedding);
   ~AttentionBody();
   void Eval(int N, DataType* output, const DataType* input,
             const DataType* input2, void* scratch, size_t scratch_size,
@@ -492,7 +493,6 @@ class AttentionBody : public BaseLayer<DataType> {
   DataType *ip_emb_ffn_d2_w_, *ip_emb_ffn_d2_b_;  // input embedding FFN dense2 weights
   DataType *ip_emb_ffn_ln_g_, *ip_emb_ffn_ln_b_;  // input embedding FFN layernorm gamma and beta
   DataType *smolgen_global_;  // global smolgen weights for all encoder layers
-  bool new_encoding_;   // flag for new position encoding
   DataType *pos_encoding_;
   int embedding_dense_size_;
   int embedding_op_size_;
@@ -506,7 +506,7 @@ class AttentionBody : public BaseLayer<DataType> {
   int smolgen_global_size_;
   const bool has_gating_;
   const bool has_smolgen_;
-  const bool use_fused_mha_;
+  bool is_pe_dense_embedding_;  // flag for dense position encoding
 };
 
 // The value head implementation
@@ -522,9 +522,9 @@ class ValueHead : public BaseLayer<DataType> {
   using BaseLayer<DataType>::GetW;
 
  public:
-  ValueHead(BaseLayer<DataType>* ip, const LegacyWeights::ValueHead& weights,
-                      void* scratch, bool attention_body, bool wdl, bool wdl_err,
-                      ActivationFunction act, int max_batch_size, bool use_gemm_ex);
+  ValueHead(BaseLayer<DataType>* ip, const MultiHeadWeights::ValueHead& weights,
+            void* scratch, bool attention_body, bool wdl, ActivationFunction act,
+            int max_batch_size, bool use_gemm_ex);
   ~ValueHead();
   void Eval(int N, DataType* output, const DataType* input,
             const DataType* input2, void* scratch, size_t scratch_size,
@@ -544,7 +544,6 @@ class ValueHead : public BaseLayer<DataType> {
   int embedding_size_;
   int value_hidden_size_;
   bool wdl_;
-  bool wdl_err_;
   bool attention_body_;
   ActivationFunction act_;
 };
