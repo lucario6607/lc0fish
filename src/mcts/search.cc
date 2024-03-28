@@ -1770,6 +1770,14 @@ void SearchWorker::PickNodesToExtendTask(
           }
 
           float score = current_score[idx];
+          if (std::isnan(score)) {
+            if (best_edge.edge() == nullptr) {
+              best_idx = idx;
+              best_without_u = util;
+              best_edge = cur_iters[idx];
+            }
+            continue;
+          }
           if (score > best) {
             second_best = best;
             second_best_edge = best_edge;
