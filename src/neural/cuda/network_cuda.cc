@@ -150,7 +150,6 @@ class CudaNetworkComputation : public NetworkComputation {
     if (wdl_) {
       auto w = inputs_outputs_->op_value_mem_[3 * sample + 0];
       auto l = inputs_outputs_->op_value_mem_[3 * sample + 2];
-      return w - l;
       if (std::isnan(w - l)) {
         std::fstream output("minibatch.bin",
                             std::ios::out | std::ios_base::binary);
@@ -172,6 +171,7 @@ class CudaNetworkComputation : public NetworkComputation {
         throw Exception("Found NaN at index " + std::to_string(sample) +
                         ", saved input to 'minibatch.bin'");
       }
+      return w - l;
     }
     return inputs_outputs_->op_value_mem_[sample];
   }
