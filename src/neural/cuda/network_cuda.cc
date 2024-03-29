@@ -139,6 +139,7 @@ class CudaNetworkComputation : public NetworkComputation {
     }
 
     batch_size_++;
+    backup_planes_.emplace_back(input);
   }
 
   void ComputeBlocking() override;
@@ -150,6 +151,27 @@ class CudaNetworkComputation : public NetworkComputation {
       auto w = inputs_outputs_->op_value_mem_[3 * sample + 0];
       auto l = inputs_outputs_->op_value_mem_[3 * sample + 2];
       return w - l;
+      if (std::isnan(w - l)) {
+        std::fstream output("minibatch.bin",
+                            std::ios::out | std::ios_base::binary);
+        for (size_t i = 0; i < backup_planes_.size(); i++) {
+          auto planes = backup_planes_[i];
+          for (size_t j = 0; j < planes.size(); j++) {
+            auto p = planes[j];
+            uint32_t idx = (j << 16) | i;
+            output.write(reinterpret_cast<char*>(&idx), sizeof(uint32_t));
+            output.write(reinterpret_cast<char*>(&p.value), sizeof(float));
+            output.write(reinterpret_cast<char*>(&p.mask), sizeof(uint64_t));
+          }
+        }
+        output.write(reinterpret_cast<char*>(
+                         &inputs_outputs_->op_value_mem_[3 * sample + 0]),
+                     3 * sizeof(float));
+        output.write(reinterpret_cast<char*>(&sample), sizeof(int));
+        output.close();
+        throw Exception("Found NaN at index " + std::to_string(sample) +
+                        ", saved input to 'minibatch.bin'");
+      }
     }
     return inputs_outputs_->op_value_mem_[sample];
   }
@@ -180,6 +202,7 @@ class CudaNetworkComputation : public NetworkComputation {
   bool moves_left_;
 
   CudaNetwork<DataType>* network_;
+  std::vector<InputPlanes> backup_planes_;
 };
 
 template <typename DataType>
