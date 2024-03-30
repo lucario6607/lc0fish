@@ -26,6 +26,7 @@
 */
 
 #include "benchmark/backendbench.h"
+#include "benchmark/backendtest.h"
 #include "benchmark/benchmark.h"
 #include "chess/board.h"
 #include "engine.h"
@@ -74,6 +75,9 @@ int main(int argc, const char** argv) {
       // Backend Benchmark mode.
       BackendBenchmark benchmark;
       benchmark.Run();
+    } else if (CommandLine::ConsumeCommand("test")) {
+      BackendTest test;
+      test.Run();
     } else if (CommandLine::ConsumeCommand("leela2onnx")) {
       lczero::ConvertLeelaToOnnx();
     } else if (CommandLine::ConsumeCommand("onnx2leela")) {

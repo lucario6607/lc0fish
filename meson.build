@@ -179,6 +179,7 @@ common_files += [
 
 files += [
   'src/benchmark/backendbench.cc',
+  'src/benchmark/backendtest.cc',
   'src/benchmark/benchmark.cc',
   'src/engine.cc',
   'src/lc0ctl/describenet.cc',
