@@ -17,7 +17,7 @@ IF %NAME%==onednn 7z a lc0-%APPVEYOR_REPO_TAG_NAME%-windows-%NAME%.zip C:\cache\
 IF %OPENCL%==true 7z a lc0-%APPVEYOR_REPO_TAG_NAME%-windows-%NAME%.zip C:\cache\opencl-nug.0.777.77\build\native\bin\OpenCL.dll
 IF %CUDNN%==true 7z a lc0-%APPVEYOR_REPO_TAG_NAME%-windows-%NAME%.zip "%CUDA_PATH%\bin\cudart64_110.dll" "%CUDA_PATH%\bin\cublas64_11.dll" "%CUDA_PATH%\bin\cublasLt64_11.dll"
 IF %CUDNN%==true 7z a lc0-%APPVEYOR_REPO_TAG_NAME%-windows-%NAME%.zip "%PKG_FOLDER%\cuda\bin\cudnn64_8.dll" "%PKG_FOLDER%\cuda\bin\cudnn_ops_infer64_8.dll" "%PKG_FOLDER%\cuda\bin\cudnn_cnn_infer64_8.dll"
-IF %CUDA%==true 7z a lc0-%APPVEYOR_REPO_TAG_NAME%-windows-%NAME%.zip "%CUDA_PATH%\bin\cudart64_110.dll" "%CUDA_PATH%\bin\cublas64_11.dll" "%CUDA_PATH%\bin\cublasLt64_11.dll"
+IF %CUDA%==true 7z a lc0-%APPVEYOR_REPO_TAG_NAME%-windows-%NAME%.zip "%CUDA_PATH%\bin\cudart64_120.dll" "%CUDA_PATH%\bin\cublas64_12.dll" "%CUDA_PATH%\bin\cublasLt64_12.dll"
 IF %NAME%==cpu-dnnl copy "%PKG_FOLDER%\%DNNL_NAME%\LICENSE" dist\DNNL-LICENSE
 IF %NAME%==cpu-dnnl copy "%PKG_FOLDER%\%DNNL_NAME%\THIRD-PARTY-PROGRAMS" dist\DNNL-THIRD-PARTY-PROGRAMS
 IF %NAME%==cpu-dnnl 7z a lc0-%APPVEYOR_REPO_TAG_NAME%-windows-%NAME%.zip .\dist\DNNL-LICENSE
