@@ -501,25 +501,26 @@ std::string Converter::MakeFFN(OnnxBuilder* builder,
   const int dff_size = ffn.dense1_b.size();
   auto flow = ffn_in;
   if (ffn.s1.size() == 1 && ffn.dense1_s.size() == 1) {
-/*
-    flow = builder->Mul(
-        name + "/ffn/input/scale", flow, *GetScalarConverter(1.0f / ffn.s1[0]));
-    auto w1 = builder->AddInitializer(name + "/dense1/w",
-        *GetWeghtsConverter(ffn.dense1_w, {embedding_size, dff_size}, {1, 0}));
-    w1 = builder->Mul(name + "/ffn/dense1/w/scale", w1,
-                      *GetScalarConverter(1.0f / ffn.dense1_s[0]));
-    flow = builder->MatMul(name + "/ffn/dense1/mul", flow, w1);
-    flow = builder->Mul(name + "/ffn/dense1/ouput/scale1", flow,
-                        *GetScalarConverter(ffn.s1[0] * ffn.dense1_s[0]));
-*/
+    /*
+      flow = builder->Mul(name + "/ffn/input/scale", flow,
+                          *GetScalarConverter(1.0f / ffn.s1[0]));
+      auto w1 = builder->AddInitializer(
+          name + "/dense1/w",
+          *GetWeghtsConverter(ffn.dense1_w, {embedding_size, dff_size},
+                              {1, 0}));
+      w1 = builder->Mul(name + "/ffn/dense1/w/scale", w1,
+                        *GetScalarConverter(1.0f / ffn.dense1_s[0]));
+      flow = builder->MatMul(name + "/ffn/dense1/mul", flow, w1);
+      flow = builder->Mul(name + "/ffn/dense1/ouput/scale1", flow,
+                          *GetScalarConverter(ffn.s1[0] * ffn.dense1_s[0]));
+    */
     auto zero = Int8OnnxConst({0}, {1});
     flow = builder->QuantizeLinear(name + "/ffn/input/scale", flow,
                                    *GetScalarConverter(ffn.s1[0]), zero);
     auto w1 = builder->AddInitializer(
         name + "/dense1/w",
-        *GetWeghtsConverter(ffn.dense1_w, {embedding_size, dff_size}, {1, 0}));
-    w1 = builder->QuantizeLinear(name + "/ffn/dense1/w/scale", w1,
-                                 *GetScalarConverter(ffn.dense1_s[0]), zero);
+        Int8OnnxWeightsAdapter(ffn.dense1_w, {embedding_size, dff_size}, {1, 0},
+                               1.0f / ffn.dense1_s[0]));
     flow = builder->MatMulInteger(name + "/ffn/dense1/mul", flow, w1);
     flow = builder->DequantizeLinear(
         name + "/ffn/dense1/scale", flow,

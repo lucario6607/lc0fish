@@ -102,4 +102,15 @@ std::string Float8E5M2OnnxWeightsAdapter::GetRawData() const {
   return TransposeAndReturnRaw<uint8_t>(dims_, order_, f8);
 }
 
+pblczero::TensorProto::DataType Int8OnnxWeightsAdapter::GetDataType() const {
+  return pblczero::TensorProto::INT8;
+}
+
+std::string Int8OnnxWeightsAdapter::GetRawData() const {
+  std::vector<int8_t> i8(weights_.size());
+  std::transform(weights_.begin(), weights_.end(), i8.begin(),
+                 [this](float x) { return std::round(x * scale_); });
+  return TransposeAndReturnRaw<int8_t>(dims_, order_, i8);
+}
+
 }  // namespace lczero

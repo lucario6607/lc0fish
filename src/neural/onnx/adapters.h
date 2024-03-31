@@ -91,6 +91,20 @@ class Float8E5M2OnnxWeightsAdapter : public FloatOnnxWeightsAdapter {
   std::string GetRawData() const override;
 };
 
+class Int8OnnxWeightsAdapter : public FloatOnnxWeightsAdapter {
+ public:
+  Int8OnnxWeightsAdapter(const std::vector<float>& weights,
+                         std::initializer_list<int> dims,
+                         std::initializer_list<int> order = {},
+                         float scale = 1.0f)
+      : FloatOnnxWeightsAdapter(weights, dims, order), scale_(scale) {}
+
+ private:
+  pblczero::TensorProto::DataType GetDataType() const override;
+  std::string GetRawData() const override;
+  float scale_;
+};
+
 // GenericOnnxConst takes inline constant (usually short and known at compile
 // time) and converts to initializer for OnnxBuilder.
 template <typename T>
