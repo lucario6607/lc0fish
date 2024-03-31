@@ -513,4 +513,21 @@ std::string OnnxBuilder::MatMulInteger(const std::string& name,
   return out;
 }
 
+std::string OnnxBuilder::QLinearMatMul(
+    const std::string& name, const std::string& a, const OnnxConst& a_scale,
+    const OnnxConst& a_zero, const std::string& b, const OnnxConst& b_scale,
+    const OnnxConst& b_zero, const OnnxConst& y_scale,
+    const OnnxConst& y_zero) {
+  auto* node = model_.mutable_graph()->add_node();
+  auto out = PopulateStdNodeFields(node, name, a, "QLinearMatMul");
+  node->add_input(AddInitializer(name + "/a_scale", a_scale));
+  node->add_input(AddInitializer(name + "/a_zero", a_zero));
+  node->add_input(b);
+  node->add_input(AddInitializer(name + "/b_scale", b_scale));
+  node->add_input(AddInitializer(name + "/b_zero", b_zero));
+  node->add_input(AddInitializer(name + "/y_scale", y_scale));
+  node->add_input(AddInitializer(name + "/y_zero", y_zero));
+  return out;
+}
+
 }  // namespace lczero

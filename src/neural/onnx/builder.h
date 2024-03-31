@@ -133,6 +133,11 @@ class OnnxBuilder {
                                const OnnxConst& zero);
   std::string MatMulInteger(const std::string& name, const std::string& input1,
                             const std::string& input2);
+  std::string QLinearMatMul(const std::string& name, const std::string& a,
+                            const OnnxConst& a_scale, const OnnxConst& a_zero,
+                            const std::string& b, const OnnxConst& b_scale,
+                            const OnnxConst& b_zero, const OnnxConst& y_scale,
+                            const OnnxConst& y_zero);
 
   // Returns ONNX model as protobuf.
   const pblczero::ModelProto& as_proto() const { return model_; }
