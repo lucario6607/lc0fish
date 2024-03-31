@@ -723,8 +723,12 @@ std::string Converter::MakeAttentionBody(OnnxBuilder* builder,
                                 Int64OnnxConst({-1, NumFilters()}, {2})));
     fist_stage_out_C = NumFilters();
   } else if (input_embedding == network_format::INPUT_EMBEDDING_PE_MAP) {
-    flow = AttentionBodyMapEmbedding(builder, flow);
-    fist_stage_out_C = 176;
+    if (weights.ip_emb_w.size() == 176 * weights.ip_emb_b.size()) {
+      flow = AttentionBodyMapEmbedding(builder, flow);
+      fist_stage_out_C = 176;
+    } else {
+      fist_stage_out_C = 112;
+    }
   } else if (input_embedding == network_format::INPUT_EMBEDDING_PE_DENSE) {
     int embedding_dense_size = weights.ip_emb_preproc_b.size() / 64;
     flow = AttentionBodyDenseEmbedding(builder, flow, weights,
