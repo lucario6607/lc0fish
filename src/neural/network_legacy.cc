@@ -141,6 +141,12 @@ BaseWeights::MHA::MHA(const pblczero::Weights::MHA& mha)
       v_b(LayerAdapter(mha.v_b()).as_vector()),
       dense_w(LayerAdapter(mha.dense_w()).as_vector()),
       dense_b(LayerAdapter(mha.dense_b()).as_vector()),
+      s1(LayerAdapter(mha.s1()).as_vector()),
+      q_s(LayerAdapter(mha.q_s()).as_vector()),
+      k_s(LayerAdapter(mha.k_s()).as_vector()),
+      v_s(LayerAdapter(mha.v_s()).as_vector()),
+      s2(LayerAdapter(mha.s2()).as_vector()),
+      dense_s(LayerAdapter(mha.dense_s()).as_vector()),
       smolgen(Smolgen(mha.smolgen())),
       has_smolgen(mha.has_smolgen()) {}
 
@@ -148,7 +154,11 @@ BaseWeights::FFN::FFN(const pblczero::Weights::FFN& ffn)
     : dense1_w(LayerAdapter(ffn.dense1_w()).as_vector()),
       dense1_b(LayerAdapter(ffn.dense1_b()).as_vector()),
       dense2_w(LayerAdapter(ffn.dense2_w()).as_vector()),
-      dense2_b(LayerAdapter(ffn.dense2_b()).as_vector()) {}
+      dense2_b(LayerAdapter(ffn.dense2_b()).as_vector()),
+      s1(LayerAdapter(ffn.s1()).as_vector()),
+      dense1_s(LayerAdapter(ffn.dense1_s()).as_vector()),
+      s2(LayerAdapter(ffn.s2()).as_vector()),
+      dense2_s(LayerAdapter(ffn.dense2_s()).as_vector()) {}
 
 BaseWeights::EncoderLayer::EncoderLayer(
     const pblczero::Weights::EncoderLayer& encoder)
