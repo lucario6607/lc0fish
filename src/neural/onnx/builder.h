@@ -126,6 +126,14 @@ class OnnxBuilder {
                    pblczero::TensorProto::DataType type);
   std::string ReduceMean(const std::string& name, const std::string& input,
                          std::initializer_list<int> axes, bool keepdims = true);
+  std::string QuantizeLinear(const std::string& name, const std::string& input,
+                             const OnnxConst& scale, const OnnxConst& zero);
+  std::string DequantizeLinear(const std::string& name,
+                               const std::string& input, const OnnxConst& scale,
+                               const OnnxConst& zero);
+  std::string MatMulInteger(const std::string& name, const std::string& input1,
+                            const std::string& input2);
+
   // Returns ONNX model as protobuf.
   const pblczero::ModelProto& as_proto() const { return model_; }
   // Returns serialized model.

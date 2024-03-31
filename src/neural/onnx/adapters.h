@@ -176,4 +176,15 @@ class Float8E5M2OnnxConst : public GenericOnnxConst<uint8_t> {
   }
 };
 
+// GenericOnnxConst for int8 values.
+class Int8OnnxConst : public GenericOnnxConst<int8_t> {
+ public:
+  using GenericOnnxConst<int8_t>::GenericOnnxConst;
+
+ private:
+  pblczero::TensorProto::DataType GetDataType() const override {
+    return pblczero::TensorProto::INT8;
+  }
+};
+
 }  // namespace lczero

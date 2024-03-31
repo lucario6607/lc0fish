@@ -482,4 +482,35 @@ std::string OnnxBuilder::ReduceMean(const std::string& name,
   return out;
 }
 
+std::string OnnxBuilder::QuantizeLinear(const std::string& name,
+                                        const std::string& input,
+                                        const OnnxConst& scale,
+                                        const OnnxConst& zero) {
+  auto* node = model_.mutable_graph()->add_node();
+  auto out = PopulateStdNodeFields(node, name, input, "QuantizeLinear");
+  node->add_input(AddInitializer(name + "/scale", scale));
+  node->add_input(AddInitializer(name + "/zero", zero));
+  return out;
+}
+
+std::string OnnxBuilder::DequantizeLinear(const std::string& name,
+                                          const std::string& input,
+                                          const OnnxConst& scale,
+                                          const OnnxConst& zero) {
+  auto* node = model_.mutable_graph()->add_node();
+  auto out = PopulateStdNodeFields(node, name, input, "DequantizeLinear");
+  node->add_input(AddInitializer(name + "/scale", scale));
+  node->add_input(AddInitializer(name + "/zero", zero));
+  return out;
+}
+
+std::string OnnxBuilder::MatMulInteger(const std::string& name,
+                                       const std::string& input1,
+                                       const std::string& input2) {
+  auto* node = model_.mutable_graph()->add_node();
+  auto out = PopulateStdNodeFields(node, name, input1, "MatMulInteger");
+  node->add_input(input2);
+  return out;
+}
+
 }  // namespace lczero
