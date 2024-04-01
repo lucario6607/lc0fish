@@ -291,7 +291,7 @@ Ort::SessionOptions GetOptions(OnnxProvider provider, int gpu, int threads,
                                int batch_size) {
   Ort::SessionOptions options;
   options.SetIntraOpNumThreads(threads);
-  options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+  options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_DISABLE_ALL);
 
   if (batch_size > 0) {
     // Override the default (variable) batch size.
