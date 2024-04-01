@@ -130,6 +130,14 @@ class Converter {
                             const lczero::OnnxConst& gammas,
                             const lczero::OnnxConst& betas, float eps = 1e-6);
 
+  std::string MakeMatMul(OnnxBuilder* builder, const std::string& name,
+                         const std::string& in,
+                         const std::vector<float>& in_scale,
+                         const std::vector<float>& w,
+                         const std::vector<float>& w_scale,
+                         std::initializer_list<int> dims,
+                         std::initializer_list<int> order);
+
   std::string MakeFFN(OnnxBuilder* builder, const MultiHeadWeights::FFN& ffn,
                       int embedding_size, const std::string& ffn_in,
                       const std::string& name, ActivationFunction activation,
@@ -493,50 +501,55 @@ std::string Converter::MakeLayerNorm(OnnxBuilder* builder,
   return flow;
 }
 
+std::string Converter::MakeMatMul(OnnxBuilder* builder, const std::string& name,
+                                  const std::string& in,
+                                  const std::vector<float>& in_scale,
+                                  const std::vector<float>& w,
+                                  const std::vector<float>& w_scale,
+                                  std::initializer_list<int> dims,
+                                  std::initializer_list<int> order) {
+  auto flow = in;
+  if (in_scale.size() == 1 && w_scale.size() == 1) {
+    flow = builder->QuantizeLinear(name + "/in/scale", flow,
+                                   *GetScalarConverter(in_scale[0]),
+                                   Int8OnnxConst({0}, {1}));
+    auto weights = builder->AddInitializer(
+        name + "/w", Int8OnnxWeightsAdapter(w, dims, order, 1.0f / w_scale[0]));
+    flow = builder->MatMulInteger(name + "/matmul", flow, weights);
+// The onnxruntime optimizer messes this completely, so we have an alternative
+// path.
+#if 1
+    flow =
+        builder->DequantizeLinear(name + "/out/scale", flow,
+                                  *GetScalarConverter(in_scale[0] * w_scale[0]),
+                                  Int32OnnxConst({0}, {1}));
+#else
+    flow = builder->Cast(name + "/to_data_type", flow, GetDataType());
+    flow = builder->Mul(name + "/out/scale", flow,
+                        *GetScalarConverter(in_scale[0] * w_scale[0]));
+#endif
+  } else {
+    flow = builder->MatMul(name + "/matmul", flow,
+                           *GetWeghtsConverter(w, dims, order));
+  }
+  return flow;
+}
+
 std::string Converter::MakeFFN(OnnxBuilder* builder,
                                const MultiHeadWeights::FFN& ffn,
                                int embedding_size, const std::string& ffn_in,
                                const std::string& name,
                                ActivationFunction activation, float alpha) {
   const int dff_size = ffn.dense1_b.size();
-  auto flow = ffn_in;
-  if (ffn.s1.size() == 1 && ffn.dense1_s.size() == 1) {
-    /*
-      flow = builder->Mul(name + "/ffn/input/scale", flow,
-                          *GetScalarConverter(1.0f / ffn.s1[0]));
-      auto w1 = builder->AddInitializer(
-          name + "/dense1/w",
-          *GetWeghtsConverter(ffn.dense1_w, {embedding_size, dff_size},
-                              {1, 0}));
-      w1 = builder->Mul(name + "/ffn/dense1/w/scale", w1,
-                        *GetScalarConverter(1.0f / ffn.dense1_s[0]));
-      flow = builder->MatMul(name + "/ffn/dense1/mul", flow, w1);
-      flow = builder->Mul(name + "/ffn/dense1/ouput/scale1", flow,
-                          *GetScalarConverter(ffn.s1[0] * ffn.dense1_s[0]));
-    */
-    auto zero = Int8OnnxConst({0}, {1});
-    flow = builder->QuantizeLinear(name + "/ffn/input/scale", flow,
-                                   *GetScalarConverter(ffn.s1[0]), zero);
-    auto w1 = builder->AddInitializer(
-        name + "/dense1/w",
-        Int8OnnxWeightsAdapter(ffn.dense1_w, {embedding_size, dff_size}, {1, 0},
-                               1.0f / ffn.dense1_s[0]));
-    flow = builder->MatMulInteger(name + "/ffn/dense1/mul", flow, w1);
-    flow = builder->DequantizeLinear(
-        name + "/ffn/dense1/scale", flow,
-        *GetScalarConverter(ffn.s1[0] * ffn.dense1_s[0]),
-        Int32OnnxConst({0}, {1}));
-  } else {
-    flow = builder->MatMul(
-        name + "/ffn/dense1/w", flow,
-        *GetWeghtsConverter(ffn.dense1_w, {embedding_size, dff_size}, {1, 0}));
-  }
+
+  auto flow =
+      MakeMatMul(builder, name + "/ffn/dense1", ffn_in, ffn.s1, ffn.dense1_w,
+                 ffn.dense1_s, {embedding_size, dff_size}, {1, 0});
   flow = builder->Add(name + "/ffn/dense1/b", flow,
                       *GetWeghtsConverter(ffn.dense1_b, {dff_size}));
   flow = MakeActivation(builder, flow, name + "/ffn/dense1", activation);
-  flow = builder->MatMul(
-      name + "/ffn/dense2/w", flow,
-      *GetWeghtsConverter(ffn.dense2_w, {dff_size, embedding_size}, {1, 0}));
+  flow = MakeMatMul(builder, name + "/ffn/dense2", flow, ffn.s2, ffn.dense2_w,
+                    ffn.dense2_s, {dff_size, embedding_size}, {1, 0});
   flow = builder->Add(name + "/ffn/dense2/b", flow,
                       *GetWeghtsConverter(ffn.dense2_b, {embedding_size}));
   if (alpha != 1.0) {
@@ -556,23 +569,23 @@ std::string Converter::MakeEncoderLayer(
   auto mha_shape =
       builder->AddInitializer("/const" + name + "/mha/shape",
                               Int64OnnxConst({-1, 64, heads, depth}, {4}));
-  auto flow = builder->MatMul(
-      name + "/mha/Q/w", encoder_in,
-      *GetWeghtsConverter(layer.mha.q_w, {embedding_size, d_model}, {1, 0}));
+  auto flow = MakeMatMul(builder, name + "/mha/Q", encoder_in, layer.mha.s1,
+                         layer.mha.q_w, layer.mha.q_s,
+                         {embedding_size, d_model}, {1, 0});
   flow = builder->Add(name + "/mha/Q/b", flow,
                       *GetWeghtsConverter(layer.mha.q_b, {d_model}));
   flow = builder->Reshape(name + "/mha/Q/reshape", flow, mha_shape);
   auto Q = builder->Transpose(name + "/mha/Q/transpose", flow, {0, 2, 1, 3});
-  flow = builder->MatMul(
-      name + "/mha/K/w", encoder_in,
-      *GetWeghtsConverter(layer.mha.k_w, {embedding_size, d_model}, {1, 0}));
+  flow = MakeMatMul(builder, name + "/mha/K", encoder_in, layer.mha.s1,
+                    layer.mha.k_w, layer.mha.k_s, {embedding_size, d_model},
+                    {1, 0});
   flow = builder->Add(name + "/mha/K/b", flow,
                       *GetWeghtsConverter(layer.mha.k_b, {d_model}));
   flow = builder->Reshape(name + "/mha/K/reshape", flow, mha_shape);
   auto K = builder->Transpose(name + "/mha/K/transpose", flow, {0, 2, 3, 1});
-  flow = builder->MatMul(
-      name + "/mha/V/w", encoder_in,
-      *GetWeghtsConverter(layer.mha.v_w, {embedding_size, d_model}, {1, 0}));
+  flow = MakeMatMul(builder, name + "/mha/V", encoder_in, layer.mha.s1,
+                    layer.mha.v_w, layer.mha.v_s, {embedding_size, d_model},
+                    {1, 0});
   flow = builder->Add(name + "/mha/V/b", flow,
                       *GetWeghtsConverter(layer.mha.v_b, {d_model}));
   flow = builder->Reshape(name + "/mha/V/reshape", flow, mha_shape);
@@ -594,10 +607,9 @@ std::string Converter::MakeEncoderLayer(
       name + "/mha/out/reshape", flow,
       builder->AddInitializer("/const" + name + "/mha/out/shape",
                               Int64OnnxConst({-1, d_model}, {2})));
-  flow =
-      builder->MatMul(name + "/mha/out/dense/w", flow,
-                      *GetWeghtsConverter(layer.mha.dense_w,
-                                          {d_model, embedding_size}, {1, 0}));
+  flow = MakeMatMul(builder, name + "/mha/out/dense", flow, layer.mha.s2,
+                    layer.mha.dense_w, layer.mha.dense_s,
+                    {d_model, embedding_size}, {1, 0});
   flow = builder->Add(name + "/mha/out/dense/b", flow,
                       *GetWeghtsConverter(layer.mha.dense_b, {embedding_size}));
   if (alpha != 1.0) {
@@ -815,7 +827,9 @@ std::string Converter::MakeAttentionBody(OnnxBuilder* builder,
         *GetWeghtsConverter(weights.ip_emb_ffn_ln_betas, {embedding_size}),
         1e-3);
   }
-
+#if 0
+  flow = builder->Identity("fence_for_onnxruntime_optimizer_bug", flow);
+#endif
   for (size_t i = 0; i < NumEncBlocks(); i++) {
     flow = MakeEncoderLayer(
         builder, weights.encoder[i], embedding_size, weights.encoder_head_count,
