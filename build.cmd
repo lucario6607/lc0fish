@@ -22,8 +22,8 @@ set OPENCL_LIB_PATH=%CUDA_PATH%\lib\x64
 set OPENCL_INCLUDE_PATH=%CUDA_PATH%\include
 
 rem 3. In most cases you won't need to change anything further down.
-rem echo Deleting build directory:
-rem rd /s build
+echo Deleting build directory:
+rd /s build
 
 set CC=cl
 set CXX=cl
@@ -67,9 +67,9 @@ meson build --backend %backend% --buildtype release -Ddx=%DX12% -Dcudnn=%CUDNN% 
 
 if errorlevel 1 exit /b
 
-rem pause
+pause
 
 cd build
 
 msbuild /m /p:Configuration=Release /p:Platform=x64 /p:WholeProgramOptimization=true ^
-/p:PreferredToolArchitecture=x64 lc0.sln /logger:"C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll"
+/p:PreferredToolArchitecture=x64 lc0.sln /filelogger
