@@ -437,6 +437,10 @@ std::unique_ptr<Network> MakeOnnxNetwork(const std::optional<WeightsFile>& w,
     converter_options.data_type =
         WeightsToOnnxConverterOptions::StringToDataType(datatype);
     converter_options.relax_op_types = false;
+    converter_options.quantize_type =
+        opts.GetOrDefault<bool>("int8", false)
+            ? WeightsToOnnxConverterOptions::QuantizeType::kInt8
+            : WeightsToOnnxConverterOptions::QuantizeType::kNone;
 
     auto converted = ConvertWeightsToOnnx(*w, converter_options);
     return std::make_unique<OnnxNetwork>(converted, opts, kProvider, gpu,

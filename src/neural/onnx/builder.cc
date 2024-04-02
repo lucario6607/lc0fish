@@ -500,7 +500,9 @@ std::string OnnxBuilder::DequantizeLinear(const std::string& name,
   auto* node = model_.mutable_graph()->add_node();
   auto out = PopulateStdNodeFields(node, name, input, "DequantizeLinear");
   node->add_input(AddInitializer(name + "/scale", scale));
-  node->add_input(AddInitializer(name + "/zero", zero));
+  if (zero.GetRawData().size() > 0) {
+    node->add_input(AddInitializer(name + "/zero", zero));
+  }
   return out;
 }
 

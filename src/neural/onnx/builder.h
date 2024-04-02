@@ -42,6 +42,18 @@ class OnnxConst {
   virtual std::string GetRawData() const = 0;
 };
 
+class EmptyOnnxConst : public OnnxConst {
+ public:
+  EmptyOnnxConst() {}
+
+ private:
+  pblczero::TensorProto::DataType GetDataType() const override {
+    return pblczero::TensorProto::UNDEFINED;
+  }
+  std::vector<int> GetDimensions() const override { return {}; }
+  std::string GetRawData() const override { return ""; }
+};
+
 // Builds Onnx::ModelProto.
 class OnnxBuilder {
  public:
@@ -130,7 +142,7 @@ class OnnxBuilder {
                              const OnnxConst& scale, const OnnxConst& zero);
   std::string DequantizeLinear(const std::string& name,
                                const std::string& input, const OnnxConst& scale,
-                               const OnnxConst& zero);
+                               const OnnxConst& zero = EmptyOnnxConst());
   std::string MatMulInteger(const std::string& name, const std::string& input1,
                             const std::string& input2);
   std::string QLinearMatMul(const std::string& name, const std::string& a,

@@ -509,25 +509,20 @@ std::string Converter::MakeMatMul(OnnxBuilder* builder, const std::string& name,
                                   std::initializer_list<int> dims,
                                   std::initializer_list<int> order) {
   auto flow = in;
-  if (in_scale.size() == 1 && w_scale.size() == 1) {
+  if (options_.quantize_type ==
+          WeightsToOnnxConverterOptions::QuantizeType::kInt8) {
+    if (in_scale.size() != 1 || w_scale.size() != 1) {
+      throw Exception("Unsupported quantization type.");
+    }
     flow = builder->QuantizeLinear(name + "/in/scale", flow,
                                    *GetScalarConverter(in_scale[0]),
                                    Int8OnnxConst({0}, {1}));
     auto weights = builder->AddInitializer(
         name + "/w", Int8OnnxWeightsAdapter(w, dims, order, 1.0f / w_scale[0]));
     flow = builder->MatMulInteger(name + "/matmul", flow, weights);
-// The onnxruntime optimizer messes this completely, so we have an alternative
-// path.
-#if 1
-    flow =
-        builder->DequantizeLinear(name + "/out/scale", flow,
-                                  *GetScalarConverter(in_scale[0] * w_scale[0]),
-                                  Int32OnnxConst({0}, {1}));
-#else
-    flow = builder->Cast(name + "/to_data_type", flow, GetDataType());
-    flow = builder->Mul(name + "/out/scale", flow,
-                        *GetScalarConverter(in_scale[0] * w_scale[0]));
-#endif
+    flow = builder->DequantizeLinear(
+        name + "/out/scale", flow,
+        *GetScalarConverter(in_scale[0] * w_scale[0]));
   } else {
     flow = builder->MatMul(name + "/matmul", flow,
                            *GetWeghtsConverter(w, dims, order));
