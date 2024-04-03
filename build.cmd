@@ -22,8 +22,8 @@ set OPENCL_LIB_PATH=%CUDA_PATH%\lib\x64
 set OPENCL_INCLUDE_PATH=%CUDA_PATH%\include
 
 rem 3. In most cases you won't need to change anything further down.
-echo Deleting build directory:
-rd /s build
+rem echo Deleting build directory:
+rem rd /s build
 
 set CC=cl
 set CXX=cl
@@ -32,7 +32,7 @@ set CXX_LD=link
 
 if exist "C:\Program Files\Microsoft Visual Studio\2022" (
   where /q cl
-  if errorlevel 1 call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" amd64
+  if errorlevel 1 call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" amd64 -vc_vars_ver=14.35
   set backend=vs2022
 ) else if exist "C:\Program Files (x86)\Microsoft Visual Studio\2019" (
   where /q cl
