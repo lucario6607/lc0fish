@@ -32,7 +32,7 @@ set CXX_LD=link
 
 if exist "C:\Program Files\Microsoft Visual Studio\2022" (
   where /q cl
-  if errorlevel 1 call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" amd64 -vc_vars_ver=14.35
+  if errorlevel 1 call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" amd64
   set backend=vs2022
 ) else if exist "C:\Program Files (x86)\Microsoft Visual Studio\2019" (
   where /q cl
@@ -67,7 +67,7 @@ meson build --backend %backend% --buildtype release -Ddx=%DX12% -Dcudnn=%CUDNN% 
 
 if errorlevel 1 exit /b
 
-pause
+rem pause
 
 cd build
 
