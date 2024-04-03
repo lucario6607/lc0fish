@@ -511,7 +511,7 @@ if get_option('build_backends')
     # generate code for the major fp16 capable architectures.
     if nvcc_extra_args == []
       nvcc_arch = '-arch=compute_70'
-      nvcc_sm_list = ['sm_70', 'sm_75', 'sm_80', 'sm_90']
+      nvcc_sm_list = ['sm_70', 'sm_75', 'sm_80', 'sm_89', 'sm_90']
       if host_machine.system() != 'windows'
         nvcc_arch = '-arch=compute_60'
         nvcc_sm_list += ['sm_60']
@@ -536,6 +536,9 @@ if get_option('build_backends')
         nvcc_extra_args += '-gencode=arch=compute_75,code=compute_75'
       endif
     endif
+    message('nvcc: ', nvcc.full_path())
+    message('nvcc_extra_args: ', nvcc_extra_args)
+    message('cuda_arguments:', cuda_arguments)
     files += custom_target('cuda fp16 code',
       input : 'src/neural/cuda/fp16_kernels.cu',
       output : outputname,
