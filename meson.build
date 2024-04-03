@@ -490,6 +490,8 @@ if get_option('build_backends')
       nvcc_extra_args = ['-arch=compute_' + cuda_cc, '-code=sm_' + cuda_cc]
     elif get_option('native_cuda') and nvcc_help.contains('-arch=native')
       nvcc_extra_args = ['-arch=native']
+    elif nvcc_help.contains('-arch=all-major')
+      nvcc_extra_args = ['-arch=all-major']
     endif
     foreach x : get_option('cudnn_include')
       cuda_arguments += ['-I', x]
