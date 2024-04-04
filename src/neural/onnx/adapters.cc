@@ -108,8 +108,9 @@ pblczero::TensorProto::DataType Int8OnnxWeightsAdapter::GetDataType() const {
 
 std::string Int8OnnxWeightsAdapter::GetRawData() const {
   std::vector<int8_t> i8(weights_.size());
-  std::transform(weights_.begin(), weights_.end(), i8.begin(),
-                 [this](float x) { return std::round(x * scale_); });
+  std::transform(weights_.begin(), weights_.end(), i8.begin(), [this](float x) {
+    return std::clamp(std::round(x * scale_), -127.0f, 127.0f);
+  });
   return TransposeAndReturnRaw<int8_t>(dims_, order_, i8);
 }
 
