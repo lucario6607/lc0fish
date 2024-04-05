@@ -130,13 +130,11 @@ class Converter {
                             const lczero::OnnxConst& gammas,
                             const lczero::OnnxConst& betas, float eps = 1e-6);
 
-  std::string MakeMatMul(OnnxBuilder* builder, const std::string& name,
-                         const std::string& in,
-                         const std::vector<float>& in_scale,
-                         const std::vector<float>& w,
-                         const std::vector<float>& w_scale,
-                         std::initializer_list<int> dims,
-                         std::initializer_list<int> order);
+  std::string MakeMatMul(
+      OnnxBuilder* builder, const std::string& name, const std::string& in,
+      const std::vector<float>& in_scale, const std::vector<float>& w,
+      const std::vector<float>& w_scale, std::initializer_list<int> dims,
+      std::initializer_list<int> order, bool quantized_in = false);
 
   std::string MakeFFN(OnnxBuilder* builder, const MultiHeadWeights::FFN& ffn,
                       int embedding_size, const std::string& ffn_in,
@@ -501,22 +499,22 @@ std::string Converter::MakeLayerNorm(OnnxBuilder* builder,
   return flow;
 }
 
-std::string Converter::MakeMatMul(OnnxBuilder* builder, const std::string& name,
-                                  const std::string& in,
-                                  const std::vector<float>& in_scale,
-                                  const std::vector<float>& w,
-                                  const std::vector<float>& w_scale,
-                                  std::initializer_list<int> dims,
-                                  std::initializer_list<int> order) {
+std::string Converter::MakeMatMul(
+    OnnxBuilder* builder, const std::string& name, const std::string& in,
+    const std::vector<float>& in_scale, const std::vector<float>& w,
+    const std::vector<float>& w_scale, std::initializer_list<int> dims,
+    std::initializer_list<int> order, bool quantized_in) {
   auto flow = in;
   if (options_.quantize_type ==
       WeightsToOnnxConverterOptions::QuantizeType::kInt8) {
     if (in_scale.size() != 1 || w_scale.size() != 1) {
       throw Exception("Unsupported quantization type.");
     }
-    flow = builder->QuantizeLinear(name + "/in/scale", flow,
-                                   *GetScalarConverter(in_scale[0]),
-                                   Int8OnnxConst({0}, {1}));
+    if (!quantized_in) {
+      flow = builder->QuantizeLinear(name + "/in/scale", flow,
+                                     *GetScalarConverter(in_scale[0]),
+                                     Int8OnnxConst({0}, {1}));
+    }
     auto weights = builder->AddInitializer(
         name + "/w", Int8OnnxWeightsAdapter(w, dims, order, 1.0f / w_scale[0]));
     flow = builder->MatMulInteger(name + "/matmul", flow, weights);
@@ -571,23 +569,28 @@ std::string Converter::MakeEncoderLayer(
   auto mha_shape =
       builder->AddInitializer("/const" + name + "/mha/shape",
                               Int64OnnxConst({-1, 64, heads, depth}, {4}));
-  auto flow = MakeMatMul(builder, name + "/mha/Q", encoder_in, layer.mha.s1,
-                         layer.mha.q_w, layer.mha.q_s,
-                         {embedding_size, d_model}, {1, 0});
+  auto q_in = encoder_in;
+  if (options_.quantize_type ==
+      WeightsToOnnxConverterOptions::QuantizeType::kInt8) {
+    q_in = builder->QuantizeLinear(name + "/in/scale", q_in,
+                                   *GetScalarConverter(layer.mha.s1[0]),
+                                   Int8OnnxConst({0}, {1}));
+  }
+  auto flow =
+      MakeMatMul(builder, name + "/mha/Q", q_in, layer.mha.s1, layer.mha.q_w,
+                 layer.mha.q_s, {embedding_size, d_model}, {1, 0}, true);
   flow = builder->Add(name + "/mha/Q/b", flow,
                       *GetWeghtsConverter(layer.mha.q_b, {d_model}));
   flow = builder->Reshape(name + "/mha/Q/reshape", flow, mha_shape);
   auto Q = builder->Transpose(name + "/mha/Q/transpose", flow, {0, 2, 1, 3});
-  flow = MakeMatMul(builder, name + "/mha/K", encoder_in, layer.mha.s1,
-                    layer.mha.k_w, layer.mha.k_s, {embedding_size, d_model},
-                    {1, 0});
+  flow = MakeMatMul(builder, name + "/mha/K", q_in, layer.mha.s1, layer.mha.k_w,
+                    layer.mha.k_s, {embedding_size, d_model}, {1, 0}, true);
   flow = builder->Add(name + "/mha/K/b", flow,
                       *GetWeghtsConverter(layer.mha.k_b, {d_model}));
   flow = builder->Reshape(name + "/mha/K/reshape", flow, mha_shape);
   auto K = builder->Transpose(name + "/mha/K/transpose", flow, {0, 2, 3, 1});
-  flow = MakeMatMul(builder, name + "/mha/V", encoder_in, layer.mha.s1,
-                    layer.mha.v_w, layer.mha.v_s, {embedding_size, d_model},
-                    {1, 0});
+  flow = MakeMatMul(builder, name + "/mha/V", q_in, layer.mha.s1, layer.mha.v_w,
+                    layer.mha.v_s, {embedding_size, d_model}, {1, 0}, true);
   flow = builder->Add(name + "/mha/V/b", flow,
                       *GetWeghtsConverter(layer.mha.v_b, {d_model}));
   flow = builder->Reshape(name + "/mha/V/reshape", flow, mha_shape);
