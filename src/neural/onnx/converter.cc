@@ -510,7 +510,7 @@ std::string Converter::MakeMatMul(OnnxBuilder* builder, const std::string& name,
                                   std::initializer_list<int> order) {
   auto flow = in;
   if (options_.quantize_type ==
-          WeightsToOnnxConverterOptions::QuantizeType::kInt8) {
+      WeightsToOnnxConverterOptions::QuantizeType::kInt8) {
     if (in_scale.size() != 1 || w_scale.size() != 1) {
       throw Exception("Unsupported quantization type.");
     }
@@ -520,9 +520,16 @@ std::string Converter::MakeMatMul(OnnxBuilder* builder, const std::string& name,
     auto weights = builder->AddInitializer(
         name + "/w", Int8OnnxWeightsAdapter(w, dims, order, 1.0f / w_scale[0]));
     flow = builder->MatMulInteger(name + "/matmul", flow, weights);
+#if 0
+    // DequantizeLinear from int32 is not supported by cuda onnxruntime provider.
     flow = builder->DequantizeLinear(
         name + "/out/scale", flow,
         *GetScalarConverter(in_scale[0] * w_scale[0]));
+#else
+    flow = builder->Cast(name + "/to_data_type", flow, GetDataType());
+    flow = builder->Mul(name + "/out/scale", flow,
+                        *GetScalarConverter(in_scale[0] * w_scale[0]));
+#endif
   } else {
     flow = builder->MatMul(name + "/matmul", flow,
                            *GetWeghtsConverter(w, dims, order));
