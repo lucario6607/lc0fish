@@ -524,9 +524,11 @@ std::string Converter::MakeMatMul(
         name + "/out/scale", flow,
         *GetScalarConverter(in_scale[0] * w_scale[0]));
 #else
-    flow = builder->Cast(name + "/to_data_type", flow, GetDataType());
+    flow =
+        builder->Cast(name + "/to_float", flow, pblczero::TensorProto::FLOAT);
     flow = builder->Mul(name + "/out/scale", flow,
-                        *GetScalarConverter(in_scale[0] * w_scale[0]));
+                        FloatOnnxConst({in_scale[0] * w_scale[0]}, {1}));
+    flow = builder->Cast(name + "/to_data_type", flow, GetDataType());
 #endif
   } else {
     flow = builder->MatMul(name + "/matmul", flow,
