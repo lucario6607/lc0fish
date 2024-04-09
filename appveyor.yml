@@ -89,10 +89,10 @@ install:
 - cmd: IF %NAME%==android set PATH=C:\ndk\android-ndk-r19c\toolchains\llvm\prebuilt\windows-x86_64\bin;%PATH%
 - cmd: IF EXIST C:\cache\OpenBLAS\ rd /s /q C:\cache\OpenBLAS
 - cmd: IF %NAME%==android sed "s/clang+*/&.cmd/" cross-files/aarch64-linux-android >crossfile-aarch64
-- cmd: IF %NAME%==android IF NOT EXIST C:\cache\OpenBLAS\android-aarch64 appveyor DownloadFile https://ci.appveyor.com/api/buildjobs/uoodoah088l4tlh6/artifacts/openblas-android-aarch64.zip
+- cmd: IF %NAME%==android IF NOT EXIST C:\cache\OpenBLAS\android-aarch64 appveyor DownloadFile https://ci.appveyor.com/api/buildjobs/iq1jix4evgjc7x2b/artifacts/openblas-android-aarch64.zip
 - cmd: IF %NAME%==android IF NOT EXIST C:\cache\OpenBLAS\android-aarch64 7z x openblas-android-aarch64.zip -oC:\cache\OpenBLAS
 - cmd: IF %NAME%==android sed "s/clang+*/&.cmd/" cross-files/armv7a-linux-android >crossfile-armv7a
-- cmd: IF %NAME%==android IF NOT EXIST C:\cache\OpenBLAS\android-armv7a appveyor DownloadFile https://ci.appveyor.com/api/buildjobs/mu5wtrntj384vp8k/artifacts/openblas-android-armv7a.zip
+- cmd: IF %NAME%==android IF NOT EXIST C:\cache\OpenBLAS\android-armv7a appveyor DownloadFile https://ci.appveyor.com/api/buildjobs/in6l9qg5vmd9rlgp/artifacts/openblas-android-armv7a.zip
 - cmd: IF %NAME%==android IF NOT EXIST C:\cache\OpenBLAS\android-armv7a 7z x openblas-android-armv7a.zip -oC:\cache\OpenBLAS
 - cmd: set PKG_FOLDER="C:\cache"
 - cmd: IF NOT EXIST c:\cache mkdir c:\cache
