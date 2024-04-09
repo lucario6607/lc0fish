@@ -531,8 +531,22 @@ std::string Converter::MakeMatMul(
     flow = builder->Cast(name + "/to_data_type", flow, GetDataType());
 #endif
   } else {
-    flow = builder->MatMul(name + "/matmul", flow,
-                           *GetWeghtsConverter(w, dims, order));
+    if (in_scale.size() == 1) {
+      flow = builder->Clip(name + "/in/clip", flow, -127 * in_scale[0],
+                           127 * in_scale[0]);
+    }
+    if (w_scale.size() == 1) {
+      float scale = w_scale[0];
+      std::vector<float> tmp(w.size());
+      std::transform(w.begin(), w.end(), tmp.begin(), [scale](float x) {
+        return std::clamp(x, -127.0f * scale, 127.0f * scale);
+      });
+      flow = builder->MatMul(name + "/matmul", flow,
+                             *GetWeghtsConverter(tmp, dims, order));
+    } else {
+      flow = builder->MatMul(name + "/matmul", flow,
+                             *GetWeghtsConverter(w, dims, order));
+    }
   }
   return flow;
 }

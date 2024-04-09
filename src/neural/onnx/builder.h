@@ -150,6 +150,8 @@ class OnnxBuilder {
                             const std::string& b, const OnnxConst& b_scale,
                             const OnnxConst& b_zero, const OnnxConst& y_scale,
                             const OnnxConst& y_zero);
+  std::string Clip(const std::string& name, const std::string& input, float min,
+                   float max);
 
   // Returns ONNX model as protobuf.
   const pblczero::ModelProto& as_proto() const { return model_; }
