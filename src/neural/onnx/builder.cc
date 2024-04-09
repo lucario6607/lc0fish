@@ -533,16 +533,11 @@ std::string OnnxBuilder::QLinearMatMul(
 }
 
 std::string OnnxBuilder::Clip(const std::string& name, const std::string& input,
-                              float min, float max) {
+                              const OnnxConst& min, const OnnxConst& max) {
   auto* node = model_.mutable_graph()->add_node();
   auto out = PopulateStdNodeFields(node, name, input, "Clip");
-  if (opset_ < 11) {
-    AddFloatAttribute(node, "min", min);
-    AddFloatAttribute(node, "max", max);
-  } else {
-    node->add_input(AddInitializer(name + "/min", FloatOnnxConst({min}, {})));
-    node->add_input(AddInitializer(name + "/max", FloatOnnxConst({max}, {})));
-  }
+  node->add_input(AddInitializer(name + "/min", min));
+  node->add_input(AddInitializer(name + "/max", max));
   return out;
 }
 

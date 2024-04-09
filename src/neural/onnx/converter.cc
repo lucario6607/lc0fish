@@ -27,6 +27,7 @@
 
 #include "neural/onnx/converter.h"
 
+#include <algorithm>
 #include <climits>
 #include <cmath>
 #include <cstddef>
@@ -532,8 +533,9 @@ std::string Converter::MakeMatMul(
 #endif
   } else {
     if (in_scale.size() == 1) {
-      flow = builder->Clip(name + "/in/clip", flow, -127 * in_scale[0],
-                           127 * in_scale[0]);
+      flow = builder->Clip(name + "/in/clip", flow,
+                           *GetScalarConverter(-127 * in_scale[0]),
+                           *GetScalarConverter(127 * in_scale[0]));
     }
     if (w_scale.size() == 1) {
       float scale = w_scale[0];
