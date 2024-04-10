@@ -541,4 +541,10 @@ std::string OnnxBuilder::Clip(const std::string& name, const std::string& input,
   return out;
 }
 
+std::string OnnxBuilder::Round(const std::string& name,
+                               const std::string& input) {
+  auto* node = model_.mutable_graph()->add_node();
+  return PopulateStdNodeFields(node, name, input, "Round");
+}
+
 }  // namespace lczero

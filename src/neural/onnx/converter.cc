@@ -512,9 +512,21 @@ std::string Converter::MakeMatMul(
       throw Exception("Unsupported quantization type.");
     }
     if (!quantized_in) {
+#if 0
       flow = builder->QuantizeLinear(name + "/in/scale", flow,
                                      *GetScalarConverter(in_scale[0]),
                                      Int8OnnxConst({0}, {1}));
+#else
+      flow = builder->Mul(name + "/in/scale", flow,
+                          *GetScalarConverter(1.0f / in_scale[0]));
+      flow = builder->Round(name + "/round", flow);
+      flow =
+          builder->Cast(name + "/to_int", flow, pblczero::TensorProto::INT32);
+      flow = builder->Clip(name + "/in/clip", flow, Int32OnnxConst({-127}, {1}),
+                           Int32OnnxConst({127}, {1}));
+      flow =
+          builder->Cast(name + "/to_int8", flow, pblczero::TensorProto::INT8);
+#endif
     }
     auto weights = builder->AddInitializer(
         name + "/w", Int8OnnxWeightsAdapter(w, dims, order, 1.0f / w_scale[0]));
@@ -534,14 +546,14 @@ std::string Converter::MakeMatMul(
   } else {
     if (in_scale.size() == 1) {
       flow = builder->Clip(name + "/in/clip", flow,
-                           *GetScalarConverter(-127 * in_scale[0]),
-                           *GetScalarConverter(127 * in_scale[0]));
+                           *GetScalarConverter(-127.5f * in_scale[0]),
+                           *GetScalarConverter(127.5f * in_scale[0]));
     }
     if (w_scale.size() == 1) {
       float scale = w_scale[0];
       std::vector<float> tmp(w.size());
       std::transform(w.begin(), w.end(), tmp.begin(), [scale](float x) {
-        return std::clamp(x, -127.0f * scale, 127.0f * scale);
+        return std::clamp(x, -127.5f * scale, 127.5f * scale);
       });
       flow = builder->MatMul(name + "/matmul", flow,
                              *GetWeghtsConverter(tmp, dims, order));
@@ -590,9 +602,19 @@ std::string Converter::MakeEncoderLayer(
   auto q_in = encoder_in;
   if (options_.quantize_type ==
       WeightsToOnnxConverterOptions::QuantizeType::kInt8) {
+#if 0
     q_in = builder->QuantizeLinear(name + "/in/scale", q_in,
                                    *GetScalarConverter(layer.mha.s1[0]),
                                    Int8OnnxConst({0}, {1}));
+#else
+    q_in = builder->Mul(name + "/in/scale", q_in,
+                        *GetScalarConverter(1.0f / layer.mha.s1[0]));
+    q_in = builder->Round(name + "/round", q_in);
+    q_in = builder->Cast(name + "/to_int", q_in, pblczero::TensorProto::INT32);
+    q_in = builder->Clip(name + "/in/clip", q_in, Int32OnnxConst({-127}, {1}),
+                         Int32OnnxConst({127}, {1}));
+    q_in = builder->Cast(name + "/to_int8", q_in, pblczero::TensorProto::INT8);
+#endif
   }
   auto flow =
       MakeMatMul(builder, name + "/mha/Q", q_in, layer.mha.s1, layer.mha.q_w,

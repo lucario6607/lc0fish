@@ -152,6 +152,7 @@ class OnnxBuilder {
                             const OnnxConst& y_zero);
   std::string Clip(const std::string& name, const std::string& input,
                    const OnnxConst& min, const OnnxConst& max);
+  std::string Round(const std::string& name, const std::string& input);
 
   // Returns ONNX model as protobuf.
   const pblczero::ModelProto& as_proto() const { return model_; }
