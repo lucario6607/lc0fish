@@ -520,10 +520,8 @@ std::string Converter::MakeMatMul(
       flow = builder->Mul(name + "/in/scale", flow,
                           *GetScalarConverter(1.0f / in_scale[0]));
       flow = builder->Round(name + "/round", flow);
-      flow =
-          builder->Cast(name + "/to_int", flow, pblczero::TensorProto::INT32);
-      flow = builder->Clip(name + "/in/clip", flow, Int32OnnxConst({-127}, {1}),
-                           Int32OnnxConst({127}, {1}));
+      flow = builder->Clip(name + "/in/clip", flow, *GetScalarConverter(-127),
+                           *GetScalarConverter(127));
       flow =
           builder->Cast(name + "/to_int8", flow, pblczero::TensorProto::INT8);
 #endif
@@ -610,9 +608,8 @@ std::string Converter::MakeEncoderLayer(
     q_in = builder->Mul(name + "/in/scale", q_in,
                         *GetScalarConverter(1.0f / layer.mha.s1[0]));
     q_in = builder->Round(name + "/round", q_in);
-    q_in = builder->Cast(name + "/to_int", q_in, pblczero::TensorProto::INT32);
-    q_in = builder->Clip(name + "/in/clip", q_in, Int32OnnxConst({-127}, {1}),
-                         Int32OnnxConst({127}, {1}));
+    q_in = builder->Clip(name + "/in/clip", q_in, *GetScalarConverter(-127),
+                         *GetScalarConverter(127));
     q_in = builder->Cast(name + "/to_int8", q_in, pblczero::TensorProto::INT8);
 #endif
   }
