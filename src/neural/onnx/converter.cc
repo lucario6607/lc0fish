@@ -550,7 +550,7 @@ std::string Converter::MakeMatMul(
     // to the lowest representable number (2^-9)
     float clip_th = 127.5 / 512;
     flow = builder->Mul(name + "/in/scale", flow,
-                        FloatOnnxConst({1 / in_scale[0] / 512}, {1}));
+                        *GetScalarConverter(1 / in_scale[0] / 512));
     flow = builder->Clip(name + "/in/clip", flow, *GetScalarConverter(-clip_th),
                          *GetScalarConverter(clip_th));
     flow = builder->Cast(name + "/in/to_float8e4m3", flow,
