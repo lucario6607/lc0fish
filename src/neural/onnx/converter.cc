@@ -520,7 +520,7 @@ std::string Converter::MakeMatMul(
       flow = builder->Mul(name + "/in/scale", flow,
                           *GetScalarConverter(1.0f / in_scale[0]));
       flow = builder->Round(name + "/round", flow);
-      flow = builder->Clip(name + "/in/clip", flow, *GetScalarConverter(-127),
+      flow = builder->Clip(name + "/in/clip", flow, *GetScalarConverter(-128),
                            *GetScalarConverter(127));
       flow =
           builder->Cast(name + "/to_int8", flow, pblczero::TensorProto::INT8);
@@ -548,19 +548,19 @@ std::string Converter::MakeMatMul(
     }
     // As we are piggy-backing on int8 data, the scaling is done with mapping 1
     // to the lowest representable number (2^-9)
-    float clip_th = 127.5 / 512;
     flow = builder->Mul(name + "/in/scale", flow,
                         *GetScalarConverter(1 / in_scale[0] / 512));
-    flow = builder->Clip(name + "/in/clip", flow, *GetScalarConverter(-clip_th),
-                         *GetScalarConverter(clip_th));
+    flow = builder->Clip(name + "/in/clip", flow,
+                         *GetScalarConverter(-128.5 / 512),
+                         *GetScalarConverter(127.5 / 512));
     flow = builder->Cast(name + "/in/to_float8e4m3", flow,
                          pblczero::TensorProto::FLOAT8E4M3FN);
     flow = builder->Cast(name + "/in/to_data_type", flow, GetDataType());
     float scale = 1 / w_scale[0] / 512;
     std::vector<float> tmp(w.size());
-    std::transform(w.begin(), w.end(), tmp.begin(), [scale, clip_th](float x) {
+    std::transform(w.begin(), w.end(), tmp.begin(), [scale](float x) {
       return FP8E4M3FNtoFP32(
-          FP32toFP8E4M3FN(std::clamp(x * scale, -clip_th, clip_th)));
+          FP32toFP8E4M3FN(std::clamp(x * scale, -128.5f / 512, 127.5f / 512)));
     });
     flow = builder->MatMul(name + "/matmul", flow,
                            *GetWeghtsConverter(tmp, dims, order));
@@ -582,14 +582,14 @@ std::string Converter::MakeMatMul(
   } else {
     if (in_scale.size() == 1) {
       flow = builder->Clip(name + "/in/clip", flow,
-                           *GetScalarConverter(-127.5f * in_scale[0]),
+                           *GetScalarConverter(-128.5f * in_scale[0]),
                            *GetScalarConverter(127.5f * in_scale[0]));
     }
     if (w_scale.size() == 1) {
       float scale = w_scale[0];
       std::vector<float> tmp(w.size());
       std::transform(w.begin(), w.end(), tmp.begin(), [scale](float x) {
-        return std::clamp(x, -127.5f * scale, 127.5f * scale);
+        return std::clamp(x, -128.5f * scale, 127.5f * scale);
       });
       flow = builder->MatMul(name + "/matmul", flow,
                              *GetWeghtsConverter(tmp, dims, order));
@@ -646,7 +646,7 @@ std::string Converter::MakeEncoderLayer(
     q_in = builder->Mul(name + "/in/scale", q_in,
                         *GetScalarConverter(1.0f / layer.mha.s1[0]));
     q_in = builder->Round(name + "/round", q_in);
-    q_in = builder->Clip(name + "/in/clip", q_in, *GetScalarConverter(-127),
+    q_in = builder->Clip(name + "/in/clip", q_in, *GetScalarConverter(-128),
                          *GetScalarConverter(127));
     q_in = builder->Cast(name + "/to_int8", q_in, pblczero::TensorProto::INT8);
 #endif
