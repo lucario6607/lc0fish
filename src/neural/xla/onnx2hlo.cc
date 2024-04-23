@@ -415,6 +415,7 @@ class Onnx2HloConverter {
     onnx_op_to_builder_["BatchNormalization"] =
         &Onnx2HloConverter::OpBatchNormalization;
     onnx_op_to_builder_["Cast"] = &Onnx2HloConverter::OpCast;
+    onnx_op_to_builder_["Clip"] = &Onnx2HloConverter::OpClip;
     onnx_op_to_builder_["Concat"] = &Onnx2HloConverter::OpConcat;
     onnx_op_to_builder_["Conv"] = &Onnx2HloConverter::OpConv;
     onnx_op_to_builder_["Div"] = &Onnx2HloConverter::OpDiv;
@@ -426,6 +427,7 @@ class Onnx2HloConverter {
     onnx_op_to_builder_["LayerNormalization"] =
         &Onnx2HloConverter::OpLayerNormalization;
     onnx_op_to_builder_["MatMul"] = &Onnx2HloConverter::OpMatMul;
+    onnx_op_to_builder_["MatMulInteger"] = &Onnx2HloConverter::OpMatMulInteger;
     onnx_op_to_builder_["Mish"] = &Onnx2HloConverter::OpMish;
     onnx_op_to_builder_["Mul"] = &Onnx2HloConverter::OpMul;
     onnx_op_to_builder_["Reciprocal"] = &Onnx2HloConverter::OpReciprocal;
@@ -435,6 +437,7 @@ class Onnx2HloConverter {
         &Onnx2HloConverter::OpReduceSumSquare;
     onnx_op_to_builder_["Relu"] = &Onnx2HloConverter::OpRelu;
     onnx_op_to_builder_["Reshape"] = &Onnx2HloConverter::OpReshape;
+    onnx_op_to_builder_["Round"] = &Onnx2HloConverter::OpRound;
     onnx_op_to_builder_["Selu"] = &Onnx2HloConverter::OpSelu;
     onnx_op_to_builder_["Sigmoid"] = &Onnx2HloConverter::OpSigmoid;
     onnx_op_to_builder_["Shape"] = &Onnx2HloConverter::OpShape;
@@ -1228,6 +1231,11 @@ class Onnx2HloConverter {
   }
 
   std::vector<HloFlow> OpMatMul(const pblczero::NodeProto& node) {
+    return MakeMatMul(node, pblczero::XlaShapeProto::PRIMITIVE_TYPE_INVALID);
+  }
+
+  std::vector<HloFlow> MakeMatMul(const pblczero::NodeProto& node,
+                                  const pblczero::XlaShapeProto::Type type) {
     CheckKnownAttributes(node, 2, {});
     auto* lhs = GetInput(node, 0);
     auto* rhs = GetInput(node, 1);
@@ -1244,7 +1252,7 @@ class Onnx2HloConverter {
       dn.add_lhs_batch_dimensions(i);
       dn.add_rhs_batch_dimensions(i);
     }
-    return {builder_.Dot(lhs, rhs, dn)};
+    return {builder_.Dot(lhs, rhs, dn, type)};
   }
 
   std::vector<HloFlow> OpGlobalAveragePool(const pblczero::NodeProto& node) {
@@ -1333,6 +1341,27 @@ class Onnx2HloConverter {
     CheckKnownAttributes(node, 1, {});
     auto* input = GetInput(node, 0);
     return {builder_.Tanh(builder_.LogPlusOne(builder_.Exponential(input)))};
+  }
+
+  std::vector<HloFlow> OpRound(const pblczero::NodeProto& node) {
+    CheckKnownAttributes(node, 1, {});
+    auto* input = GetInput(node, 0);
+    return {builder_.RoundNearestEven(input)};
+  }
+
+  std::vector<HloFlow> OpClip(const pblczero::NodeProto& node) {
+    CheckKnownAttributes(node, 3, {});
+    auto* input = GetInput(node, 0);
+    auto* min = GetInput(node, 1);
+    auto* max = GetInput(node, 2);
+    HloTensorType shape(input->shape());
+    min = builder_.Broadcast(min, shape, {});
+    max = builder_.Broadcast(max, shape, {});
+    return {builder_.Clamp(min, input, max)};
+  }
+
+  std::vector<HloFlow> OpMatMulInteger(const pblczero::NodeProto& node) {
+    return MakeMatMul(node, pblczero::XlaShapeProto::S32);
   }
 
   /////////////////////////////////////////////////////////////////////////////

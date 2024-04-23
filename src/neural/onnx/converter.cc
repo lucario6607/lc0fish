@@ -225,16 +225,16 @@ std::unique_ptr<OnnxConst> Converter::GetWeghtsConverter(
 std::unique_ptr<OnnxConst> Converter::GetScalarConverter(float in) {
   switch (options_.data_type) {
     case WeightsToOnnxConverterOptions::DataType::kFloat32:
-      return std::make_unique<FloatOnnxConst>(FloatOnnxConst({in}, {1}));
+      return std::make_unique<FloatOnnxConst>(FloatOnnxConst({in}, {}));
     case WeightsToOnnxConverterOptions::DataType::kFloat16:
       return std::make_unique<Float16OnnxConst>(
-          Float16OnnxConst({FP32toFP16(in)}, {1}));
+          Float16OnnxConst({FP32toFP16(in)}, {}));
     case WeightsToOnnxConverterOptions::DataType::kBFloat16:
       return std::make_unique<BFloat16OnnxConst>(
-          BFloat16OnnxConst({FP32toBF16(in)}, {1}));
+          BFloat16OnnxConst({FP32toBF16(in)}, {}));
     case WeightsToOnnxConverterOptions::DataType::kFloat8E5M2:
       return std::make_unique<Float8E5M2OnnxConst>(
-          Float8E5M2OnnxConst({FP32toFP8E5M2(in)}, {1}));
+          Float8E5M2OnnxConst({FP32toFP8E5M2(in)}, {}));
   }
   throw Exception("Data type " +
                   std::to_string(static_cast<int>(options_.data_type)) +
