@@ -85,7 +85,7 @@ void FetchMutableForType(pblczero::XlaLiteralProto* literal,
       break;
     default:
       throw Exception(
-          "Unsupported type for constant input " +
+          "Unsupported type for mutable input " +
           pblczero::XlaShapeProto::Type_Name(literal->shape().element_type()));
   }
 }
@@ -131,6 +131,13 @@ void LiteralOutInOpDifferentTypes(pblczero::XlaLiteralProto* dst,
     FetchConstForType(operand, src_type,
                       [&](const auto& src) { func(dst, src); });
   });
+}
+
+size_t GetLiteralByteSize(const pblczero::XlaLiteralProto& literal) {
+  size_t res;
+  FetchConstForType(literal, literal.shape().element_type(),
+                    [&](const auto& x) { res = x.size() * sizeof(x[0]); });
+  return res;
 }
 
 pblczero::XlaLiteralProto ConstOpConvert(
@@ -400,6 +407,9 @@ pblczero::XlaLiteralProto OnnxTensorToXlaLiteral(
     case pblczero::TensorProto::INT32:
       convert(tensor.raw_data(), literal.mutable_s32s());
       break;
+    case pblczero::TensorProto::INT8:
+      literal.set_s8s(tensor.raw_data());
+      break;
     default:
       throw Exception("Cannot convert ONNX tensor to XLA literal for type " +
                       pblczero::XlaShapeProto::Type_Name(
@@ -606,7 +616,12 @@ class Onnx2HloConverter {
   bool AllInputsConstant(const pblczero::NodeProto& node) {
     for (const auto& input : node.input()) {
       const std::string name(input);
-      if (initializers_.count(name)) continue;
+      if (auto tensor = initializers_.find(name);
+          tensor != initializers_.end() &&
+          tensor->second->raw_data().size() <=
+              options_.max_inline_constant_size) {
+        continue;
+      }
       if (auto iter = onnx_name_to_hlo_flow_.find(name);
           iter != onnx_name_to_hlo_flow_.end() &&
           iter->second->opcode() == "constant") {
@@ -924,10 +939,14 @@ class Onnx2HloConverter {
         GetAttributeAs<int>(node, "to"));
     const auto hlo_type = OnnxTypeToXlaType(onnx_type);
     if (input->shape().element_type() == hlo_type) return {input};
-    // Only convert constants of int64 to int32 as that's what TF does.
-    if (AllInputsConstant(node)) {
-      return {builder_.Constant(
-          ConstOpConvert(*GetConstantInput(node, 0), hlo_type))};
+    // Only convert constants of int64 or int32 for shape related ops.
+    if (AllInputsConstant(node) &&
+        (input->shape().element_type() == pblczero::XlaShapeProto::S32 ||
+         input->shape().element_type() == pblczero::XlaShapeProto::S64)) {
+      auto literal = ConstOpConvert(*GetConstantInput(node, 0), hlo_type);
+      if (GetLiteralByteSize(literal) <= options_.max_inline_constant_size) {
+        return {builder_.Constant(literal)};
+      }
     }
     return {builder_.Convert(input, hlo_type)};
   }
@@ -1001,7 +1020,10 @@ class Onnx2HloConverter {
       for (size_t i = 0; i < node.input_size(); ++i) {
         constants.push_back(*GetConstantInput(node, i));
       }
-      return {builder_.Constant(ConstOpConcat(constants, axis))};
+      auto literal = ConstOpConcat(constants, axis);
+      if (GetLiteralByteSize(literal) <= options_.max_inline_constant_size) {
+        return {builder_.Constant(literal)};
+      }
     }
     std::vector<HloFlow> inputs;
     for (size_t i = 0; i < node.input_size(); ++i) {

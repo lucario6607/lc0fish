@@ -579,6 +579,21 @@ std::string Converter::MakeMatMul(
     flow = builder->Mul(name + "/out/scale", flow,
                         *GetScalarConverter(512 * in_scale[0]));
 #endif
+  } else if (options_.quantize_type ==
+             WeightsToOnnxConverterOptions::QuantizeType::kInt8Weights) {
+    if (in_scale.size() != 1 || w_scale.size() != 1) {
+      throw Exception("Unsupported quantization type.");
+    }
+    flow = builder->Clip(name + "/in/clip", flow,
+                         *GetScalarConverter(-128.5f * in_scale[0]),
+                         *GetScalarConverter(127.5f * in_scale[0]));
+    auto weights = builder->AddInitializer(
+        name + "/w", Int8OnnxWeightsAdapter(w, dims, order, 1.0f / w_scale[0]));
+    weights =
+        builder->Cast(name + "/weights/to_data_type", weights, GetDataType());
+    flow = builder->MatMul(name + "/matmul", flow, weights);
+    flow = builder->Mul(name + "/out/scale", flow,
+                        *GetScalarConverter(w_scale[0]));
   } else {
     if (in_scale.size() == 1) {
       flow = builder->Clip(name + "/in/clip", flow,
@@ -1370,6 +1385,7 @@ WeightsToOnnxConverterOptions::QuantizeType
 WeightsToOnnxConverterOptions::StringToQuantizeType(const std::string& s) {
   if (s == "none") return QuantizeType::kNone;
   if (s == "int8") return QuantizeType::kInt8;
+  if (s == "int8weights") return QuantizeType::kInt8Weights;
   if (s == "f8e4m3") return QuantizeType::kFloat8E4M3;
   throw Exception("Invalid quantization type: [" + s +
                   "]. Only int8, f8e4m3 and none are supported.");
