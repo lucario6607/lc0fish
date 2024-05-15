@@ -85,6 +85,10 @@ struct BaseWeights {
     Vec v_s;
     Vec s2;
     Vec dense_s;
+    Vec q_out_s;
+    Vec k_out_s;
+    Vec v_out_s;
+    Vec dense_out_s;
     Smolgen smolgen;
     bool has_smolgen;
   };
@@ -97,8 +101,10 @@ struct BaseWeights {
     Vec dense2_b;
     Vec s1;
     Vec dense1_s;
+    Vec dense1_out_s;
     Vec s2;
     Vec dense2_s;
+    Vec dense2_out_s;
   };
 
   struct EncoderLayer {
