@@ -101,8 +101,7 @@ bool ProcessParameters(OptionsParser* options) {
       std::vector<std::string>{"f32", "f16", "bf16", "f8e5m2"}) = "f32";
   options->Add<ChoiceOption>(
       kOnnxQuantizeTypeId,
-      std::vector<std::string>{"none", "int8", "int8weights", "f8e4m3"}) =
-      "none";
+      std::vector<std::string>{"none", "int8"}) = "none";
   options->Add<BoolOption>(kHloAllowPartialResultId);
   options->Add<BoolOption>(kRelaxOpTypes) = false;
   options->HideOption(kOnnxBatchSizeId);

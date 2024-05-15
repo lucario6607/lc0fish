@@ -541,59 +541,6 @@ std::string Converter::MakeMatMul(
                         FloatOnnxConst({in_scale[0] * w_scale[0]}, {1}));
     flow = builder->Cast(name + "/to_data_type", flow, GetDataType());
 #endif
-  } else if (options_.quantize_type ==
-             WeightsToOnnxConverterOptions::QuantizeType::kFloat8E4M3) {
-    if (in_scale.size() != 1 || w_scale.size() != 1) {
-      throw Exception("Unsupported quantization type.");
-    }
-    // As we are piggy-backing on int8 data, the scaling is done with mapping 1
-    // to the lowest representable number (2^-9)
-    flow = builder->Mul(name + "/in/scale", flow,
-                        *GetScalarConverter(1 / in_scale[0] / 512));
-    flow = builder->Clip(name + "/in/clip", flow,
-                         *GetScalarConverter(-128.5 / 512),
-                         *GetScalarConverter(127.5 / 512));
-    flow = builder->Cast(name + "/in/to_float8e4m3", flow,
-                         pblczero::TensorProto::FLOAT8E4M3FN);
-    flow = builder->Cast(name + "/in/to_data_type", flow, GetDataType());
-    float scale = 1 / w_scale[0] / 512;
-    std::vector<float> tmp(w.size());
-    std::transform(w.begin(), w.end(), tmp.begin(), [scale](float x) {
-      return FP8E4M3FNtoFP32(
-          FP32toFP8E4M3FN(std::clamp(x * scale, -128.5f / 512, 127.5f / 512)));
-    });
-    flow = builder->MatMul(name + "/matmul", flow,
-                           *GetWeghtsConverter(tmp, dims, order));
-#if 1
-    // For float/float16/bfloat16 output.
-    flow =
-        builder->Mul(name + "/out/scale", flow,
-                     *GetScalarConverter(512 * 512 * in_scale[0] * w_scale[0]));
-#else
-    // For f8 output.
-    flow = builder->Mul(name + "/out/prescale", flow,
-                        *GetScalarConverter(512 * w_scale[0]));
-    flow = builder->Cast(name + "/out/to_float8e4m3", flow,
-                         pblczero::TensorProto::FLOAT8E4M3FN);
-    flow = builder->Cast(name + "/out/to_data_type", flow, GetDataType());
-    flow = builder->Mul(name + "/out/scale", flow,
-                        *GetScalarConverter(512 * in_scale[0]));
-#endif
-  } else if (options_.quantize_type ==
-             WeightsToOnnxConverterOptions::QuantizeType::kInt8Weights) {
-    if (in_scale.size() != 1 || w_scale.size() != 1) {
-      throw Exception("Unsupported quantization type.");
-    }
-    flow = builder->Clip(name + "/in/clip", flow,
-                         *GetScalarConverter(-128.5f * in_scale[0]),
-                         *GetScalarConverter(127.5f * in_scale[0]));
-    auto weights = builder->AddInitializer(
-        name + "/w", Int8OnnxWeightsAdapter(w, dims, order, 1.0f / w_scale[0]));
-    weights =
-        builder->Cast(name + "/weights/to_data_type", weights, GetDataType());
-    flow = builder->MatMul(name + "/matmul", flow, weights);
-    flow = builder->Mul(name + "/out/scale", flow,
-                        *GetScalarConverter(w_scale[0]));
   } else {
     if (in_scale.size() == 1) {
       flow = builder->Clip(name + "/in/clip", flow,
@@ -1385,10 +1332,8 @@ WeightsToOnnxConverterOptions::QuantizeType
 WeightsToOnnxConverterOptions::StringToQuantizeType(const std::string& s) {
   if (s == "none") return QuantizeType::kNone;
   if (s == "int8") return QuantizeType::kInt8;
-  if (s == "int8weights") return QuantizeType::kInt8Weights;
-  if (s == "f8e4m3") return QuantizeType::kFloat8E4M3;
   throw Exception("Invalid quantization type: [" + s +
-                  "]. Only int8, f8e4m3 and none are supported.");
+                  "]. Only int8 and none are supported.");
 }
 
 pblczero::Net ConvertWeightsToOnnx(
