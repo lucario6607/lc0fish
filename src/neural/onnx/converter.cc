@@ -512,11 +512,6 @@ std::string Converter::MakeMatMul(
       throw Exception("Unsupported quantization type.");
     }
     if (!quantized_in) {
-#if 0
-      flow = builder->QuantizeLinear(name + "/in/scale", flow,
-                                     *GetScalarConverter(in_scale[0]),
-                                     Int8OnnxConst({0}, {1}));
-#else
       flow = builder->Mul(name + "/in/scale", flow,
                           *GetScalarConverter(1.0f / in_scale[0]));
       flow = builder->Round(name + "/round", flow);
@@ -524,23 +519,15 @@ std::string Converter::MakeMatMul(
                            *GetScalarConverter(127));
       flow =
           builder->Cast(name + "/to_int8", flow, pblczero::TensorProto::INT8);
-#endif
     }
     auto weights = builder->AddInitializer(
         name + "/w", Int8OnnxWeightsAdapter(w, dims, order, 1.0f / w_scale[0]));
     flow = builder->MatMulInteger(name + "/matmul", flow, weights);
-#if 0
-    // DequantizeLinear from int32 is not supported by cuda onnxruntime provider.
-    flow = builder->DequantizeLinear(
-        name + "/out/scale", flow,
-        *GetScalarConverter(in_scale[0] * w_scale[0]));
-#else
     flow =
         builder->Cast(name + "/to_float", flow, pblczero::TensorProto::FLOAT);
     flow = builder->Mul(name + "/out/scale", flow,
                         FloatOnnxConst({in_scale[0] * w_scale[0]}, {1}));
     flow = builder->Cast(name + "/to_data_type", flow, GetDataType());
-#endif
   } else {
     if (in_scale.size() == 1) {
       flow = builder->Clip(name + "/in/clip", flow,
@@ -600,18 +587,12 @@ std::string Converter::MakeEncoderLayer(
   auto q_in = encoder_in;
   if (options_.quantize_type ==
       WeightsToOnnxConverterOptions::QuantizeType::kInt8) {
-#if 0
-    q_in = builder->QuantizeLinear(name + "/in/scale", q_in,
-                                   *GetScalarConverter(layer.mha.s1[0]),
-                                   Int8OnnxConst({0}, {1}));
-#else
     q_in = builder->Mul(name + "/in/scale", q_in,
                         *GetScalarConverter(1.0f / layer.mha.s1[0]));
     q_in = builder->Round(name + "/round", q_in);
     q_in = builder->Clip(name + "/in/clip", q_in, *GetScalarConverter(-128),
                          *GetScalarConverter(127));
     q_in = builder->Cast(name + "/to_int8", q_in, pblczero::TensorProto::INT8);
-#endif
   }
   auto flow =
       MakeMatMul(builder, name + "/mha/Q", q_in, layer.mha.s1, layer.mha.q_w,
@@ -865,9 +846,6 @@ std::string Converter::MakeAttentionBody(OnnxBuilder* builder,
         *GetWeghtsConverter(weights.ip_emb_ffn_ln_betas, {embedding_size}),
         1e-3);
   }
-#if 0
-  flow = builder->Identity("fence_for_onnxruntime_optimizer_bug", flow);
-#endif
   for (size_t i = 0; i < NumEncBlocks(); i++) {
     flow = MakeEncoderLayer(
         builder, weights.encoder[i], embedding_size, weights.encoder_head_count,
