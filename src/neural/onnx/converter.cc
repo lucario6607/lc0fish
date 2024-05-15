@@ -135,7 +135,8 @@ class Converter {
       OnnxBuilder* builder, const std::string& name, const std::string& in,
       const std::vector<float>& in_scale, const std::vector<float>& w,
       const std::vector<float>& w_scale, std::initializer_list<int> dims,
-      std::initializer_list<int> order, bool quantized_in = false);
+      std::initializer_list<int> order, const std::vector<float>& out_scale,
+      bool quantized_in = false);
 
   std::string MakeFFN(OnnxBuilder* builder, const MultiHeadWeights::FFN& ffn,
                       int embedding_size, const std::string& ffn_in,
@@ -504,7 +505,8 @@ std::string Converter::MakeMatMul(
     OnnxBuilder* builder, const std::string& name, const std::string& in,
     const std::vector<float>& in_scale, const std::vector<float>& w,
     const std::vector<float>& w_scale, std::initializer_list<int> dims,
-    std::initializer_list<int> order, bool quantized_in) {
+    std::initializer_list<int> order, const std::vector<float>& out_scale,
+    bool quantized_in) {
   auto flow = in;
   if (options_.quantize_type ==
       WeightsToOnnxConverterOptions::QuantizeType::kInt8) {
@@ -525,16 +527,26 @@ std::string Converter::MakeMatMul(
     flow = builder->MatMulInteger(name + "/matmul", flow, weights);
     flow =
         builder->Cast(name + "/to_float", flow, pblczero::TensorProto::FLOAT);
-    flow = builder->Mul(name + "/out/scale", flow,
-                        FloatOnnxConst({in_scale[0] * w_scale[0]}, {1}));
+    if (out_scale.size() == 1) {
+      flow = builder->Mul(
+          name + "/out/int8_scale", flow,
+          FloatOnnxConst({in_scale[0] * w_scale[0] / out_scale[0]}, {1}));
+      flow = builder->Round(name + "/out/round", flow);
+      flow = builder->Clip(name + "/out/clip", flow, *GetScalarConverter(-128),
+                           *GetScalarConverter(127));
+      flow = builder->Mul(name + "/out/scale", flow,
+                          FloatOnnxConst({out_scale[0]}, {1}));
+    } else {
+      flow = builder->Mul(name + "/out/scale", flow,
+                          FloatOnnxConst({in_scale[0] * w_scale[0]}, {1}));
+    }
     flow = builder->Cast(name + "/to_data_type", flow, GetDataType());
   } else {
-    if (in_scale.size() == 1) {
+    if (in_scale.size() == 1 && w_scale.size() == 1) {
+#if 0
       flow = builder->Clip(name + "/in/clip", flow,
                            *GetScalarConverter(-128.5f * in_scale[0]),
                            *GetScalarConverter(127.5f * in_scale[0]));
-    }
-    if (w_scale.size() == 1) {
       float scale = w_scale[0];
       std::vector<float> tmp(w.size());
       std::transform(w.begin(), w.end(), tmp.begin(), [scale](float x) {
@@ -542,9 +554,42 @@ std::string Converter::MakeMatMul(
       });
       flow = builder->MatMul(name + "/matmul", flow,
                              *GetWeghtsConverter(tmp, dims, order));
-    } else {
+      if (out_scale.size() == 1) {
+        flow = builder->Clip(name + "/out/clip", flow,
+                             *GetScalarConverter(-128.5f * out_scale[0]),
+                             *GetScalarConverter(127.5f * out_scale[0]));
+      }
+#else
+      flow = builder->Mul(name + "/in/scale", flow,
+                          *GetScalarConverter(1.0f / in_scale[0]));
+      flow = builder->Round(name + "/in/round", flow);
+      flow = builder->Clip(name + "/in/clip", flow, *GetScalarConverter(-128),
+                           *GetScalarConverter(127));
+      flow = builder->Mul(name + "/in/scale_back", flow,
+                          *GetScalarConverter(in_scale[0]));
+      float scale = w_scale[0];
+      std::vector<float> tmp(w.size());
+      std::transform(w.begin(), w.end(), tmp.begin(), [scale](float x) {
+        return round(std::clamp(x / scale, -128.5f, 127.5f)) * scale;
+      });
+      flow = builder->MatMul(name + "/matmul", flow,
+                             *GetWeghtsConverter(tmp, dims, order));
+      if (out_scale.size() == 1) {
+        flow = builder->Mul(name + "/out/scale", flow,
+                            *GetScalarConverter(1.0f / out_scale[0]));
+        flow = builder->Round(name + "/out/round", flow);
+        flow =
+            builder->Clip(name + "/out/clip", flow, *GetScalarConverter(-128),
+                          *GetScalarConverter(127));
+        flow = builder->Mul(name + "/out/scale_back", flow,
+                            *GetScalarConverter(out_scale[0]));
+      }
+#endif
+    } else if (in_scale.size() == 0 && w_scale.size() == 0) {
       flow = builder->MatMul(name + "/matmul", flow,
                              *GetWeghtsConverter(w, dims, order));
+    } else {
+      throw Exception("Unsupported quantization type.");
     }
   }
   return flow;
@@ -557,14 +602,15 @@ std::string Converter::MakeFFN(OnnxBuilder* builder,
                                ActivationFunction activation, float alpha) {
   const int dff_size = ffn.dense1_b.size();
 
-  auto flow =
-      MakeMatMul(builder, name + "/ffn/dense1", ffn_in, ffn.s1, ffn.dense1_w,
-                 ffn.dense1_s, {embedding_size, dff_size}, {1, 0});
+  auto flow = MakeMatMul(builder, name + "/ffn/dense1", ffn_in, ffn.s1,
+                         ffn.dense1_w, ffn.dense1_s, {embedding_size, dff_size},
+                         {1, 0}, ffn.dense1_out_s);
   flow = builder->Add(name + "/ffn/dense1/b", flow,
                       *GetWeghtsConverter(ffn.dense1_b, {dff_size}));
   flow = MakeActivation(builder, flow, name + "/ffn/dense1", activation);
   flow = MakeMatMul(builder, name + "/ffn/dense2", flow, ffn.s2, ffn.dense2_w,
-                    ffn.dense2_s, {dff_size, embedding_size}, {1, 0});
+                    ffn.dense2_s, {dff_size, embedding_size}, {1, 0},
+                    ffn.dense2_out_s);
   flow = builder->Add(name + "/ffn/dense2/b", flow,
                       *GetWeghtsConverter(ffn.dense2_b, {embedding_size}));
   if (alpha != 1.0) {
@@ -596,19 +642,22 @@ std::string Converter::MakeEncoderLayer(
   }
   auto flow =
       MakeMatMul(builder, name + "/mha/Q", q_in, layer.mha.s1, layer.mha.q_w,
-                 layer.mha.q_s, {embedding_size, d_model}, {1, 0}, true);
+                 layer.mha.q_s, {embedding_size, d_model}, {1, 0},
+                 layer.mha.q_out_s, true);
   flow = builder->Add(name + "/mha/Q/b", flow,
                       *GetWeghtsConverter(layer.mha.q_b, {d_model}));
   flow = builder->Reshape(name + "/mha/Q/reshape", flow, mha_shape);
   auto Q = builder->Transpose(name + "/mha/Q/transpose", flow, {0, 2, 1, 3});
   flow = MakeMatMul(builder, name + "/mha/K", q_in, layer.mha.s1, layer.mha.k_w,
-                    layer.mha.k_s, {embedding_size, d_model}, {1, 0}, true);
+                    layer.mha.k_s, {embedding_size, d_model}, {1, 0},
+                    layer.mha.k_out_s, true);
   flow = builder->Add(name + "/mha/K/b", flow,
                       *GetWeghtsConverter(layer.mha.k_b, {d_model}));
   flow = builder->Reshape(name + "/mha/K/reshape", flow, mha_shape);
   auto K = builder->Transpose(name + "/mha/K/transpose", flow, {0, 2, 3, 1});
   flow = MakeMatMul(builder, name + "/mha/V", q_in, layer.mha.s1, layer.mha.v_w,
-                    layer.mha.v_s, {embedding_size, d_model}, {1, 0}, true);
+                    layer.mha.v_s, {embedding_size, d_model}, {1, 0},
+                    layer.mha.v_out_s, true);
   flow = builder->Add(name + "/mha/V/b", flow,
                       *GetWeghtsConverter(layer.mha.v_b, {d_model}));
   flow = builder->Reshape(name + "/mha/V/reshape", flow, mha_shape);
@@ -632,7 +681,7 @@ std::string Converter::MakeEncoderLayer(
                               Int64OnnxConst({-1, d_model}, {2})));
   flow = MakeMatMul(builder, name + "/mha/out/dense", flow, layer.mha.s2,
                     layer.mha.dense_w, layer.mha.dense_s,
-                    {d_model, embedding_size}, {1, 0});
+                    {d_model, embedding_size}, {1, 0}, layer.mha.dense_out_s);
   flow = builder->Add(name + "/mha/out/dense/b", flow,
                       *GetWeghtsConverter(layer.mha.dense_b, {embedding_size}));
   if (alpha != 1.0) {
