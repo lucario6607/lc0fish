@@ -2,12 +2,12 @@
 setlocal
 
 rem 1. Set the following for the options you want to build.
-set CUDNN=true
-set CUDA=true
+set CUDNN=false
+set CUDA=false
 set DX12=false
 set OPENCL=false
-set MKL=false
-set DNNL=false
+set MKL=true
+set DNNL=true
 set OPENBLAS=false
 set EIGEN=false
 set TEST=false
@@ -16,8 +16,8 @@ rem 2. Edit the paths for the build dependencies.
 set CUDA_PATH=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.0
 set CUDNN_PATH=%CUDA_PATH%
 set OPENBLAS_PATH=C:\OpenBLAS
-set MKL_PATH=C:\Program Files (x86)\IntelSWTools\compilers_and_libraries\windows\mkl
-set DNNL_PATH=C:\dnnl_win_1.1.1_cpu_vcomp
+set MKL_PATH=C:\Program Files (x86)\Intel\oneAPI/mkl
+set DNNL_PATH=C:\Program Files (x86)\Intel\oneAPI/dnnl
 set OPENCL_LIB_PATH=%CUDA_PATH%\lib\x64
 set OPENCL_INCLUDE_PATH=%CUDA_PATH%\include
 
